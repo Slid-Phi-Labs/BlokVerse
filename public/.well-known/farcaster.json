@@ -2,9 +2,9 @@
   "miniapp": {
     "version": "1",
     "name": "bLOK CHaiN",
-    "homeUrl": "https://sam-camel-recovery-idaho.trycloudflare.com",
-    "iconUrl": "https://sam-camel-recovery-idaho.trycloudflare.com/logo-blok-192.png",
-    "splashImageUrl": "https://sam-camel-recovery-idaho.trycloudflare.com/logo-blok-192.png",
+    "homeUrl": "https://blok.grok.me",
+    "iconUrl": "https://blok.grok.me/logo-blok-192.png",
+    "splashImageUrl": "https://blok.grok.me/logo-blok-192.png",
     "splashBackgroundColor": "#e8eae8",
     "subtitle": "Forge blocks into one chain",
     "description": "Compile random crypto blocks into one solid chain. Timed ranked play, top 50 boards, stake $bLOkz on Solana.",
@@ -13,9 +13,9 @@
     "tagline": "Solidify the chain",
     "ogTitle": "bLOK CHaiN",
     "ogDescription": "Forge · stake · top 50 — $bLOkz puzzle mini app",
-    "ogImageUrl": "https://sam-camel-recovery-idaho.trycloudflare.com/logo-blok-192.png",
-    "heroImageUrl": "https://sam-camel-recovery-idaho.trycloudflare.com/logo-blok-192.png",
-    "imageUrl": "https://sam-camel-recovery-idaho.trycloudflare.com/logo-blok-192.png",
+    "ogImageUrl": "https://blok.grok.me/logo-blok-192.png",
+    "heroImageUrl": "https://blok.grok.me/logo-blok-192.png",
+    "imageUrl": "https://blok.grok.me/logo-blok-192.png",
     "buttonTitle": "Forge",
     "requiredCapabilities": ["actions.signIn", "actions.ready"]
   }
