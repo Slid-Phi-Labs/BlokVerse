@@ -4,11 +4,21 @@
  * Fixed total supply with six allocation buckets. Live in-app rewards
  * (forge, stake yield, monthly drip) draw from the Play / Staking / Community
  * buckets. In-app rewards use the same ratios.
+ *
+ * Live Solana mint (pump.fun): see onchain.ts — game site https://blok.grok.app
  */
+
+import { BLOKZ_ONCHAIN, GAME_URL } from "./onchain";
 
 export const TOKEN_SYMBOL = "$bLOkz";
 export const TOKEN_NAME = "bLOkz";
-export const TOTAL_SUPPLY = 1_000_000_000; // 1B fixed
+export const TOTAL_SUPPLY = 1_000_000_000; // 1B fixed (in-app model)
+
+/** Live pump.fun market — trade / verify outside the demo ledger */
+export const LIVE_TOKEN = BLOKZ_ONCHAIN;
+export const LIVE_TOKEN_MINT = BLOKZ_ONCHAIN.mint;
+export const LIVE_TOKEN_URL = BLOKZ_ONCHAIN.pumpUrl;
+export const GAME_SITE = GAME_URL;
 
 export type AllocationId =
   | "play"
