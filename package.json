@@ -1,5 +1,5 @@
 {
-  "name": "blok-chain",
+  "name": "blokgame",
   "private": true,
   "sideEffects": false,
   "type": "module",
