@@ -21,6 +21,7 @@ import {
   SOLANA_TOKEN,
 } from "./solana";
 import type { FarcasterAuthMode } from "@/lib/farcaster/types";
+import { createSpSessionStorage } from "@/lib/codec/spStorage";
 import {
   type ChatMessage,
   type Difficulty,
@@ -244,16 +245,8 @@ function endRound(
   });
 }
 
-const gameStorage = createJSONStorage(() => {
-  if (typeof window === "undefined") {
-    return {
-      getItem: () => null,
-      setItem: () => {},
-      removeItem: () => {},
-    };
-  }
-  return window.sessionStorage;
-});
+/** sessionStorage + slid-phi packing for board / solution / scoreboards */
+const gameStorage = createJSONStorage(() => createSpSessionStorage());
 
 function markHydrated() {
   useGameStore.setState({ hasHydrated: true });
