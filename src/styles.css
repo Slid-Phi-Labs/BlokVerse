@@ -86,6 +86,116 @@
   }
 }
 
+/* —— Solana wallet-adapter UI (light theme to match bLOK CHaiN) —— */
+.wallet-adapter-button {
+  font-family: var(--font-sans) !important;
+  color: var(--color-fg) !important;
+  border-radius: var(--radius-md) !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.wallet-adapter-button-trigger {
+  background-color: var(--color-primary) !important;
+  color: var(--color-primary-fg) !important;
+}
+
+.wallet-adapter-button:not([disabled]):hover {
+  background-color: color-mix(
+    in oklab,
+    var(--color-primary) 88%,
+    black
+  ) !important;
+}
+
+.wallet-adapter-button:not([disabled]):focus-visible {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px;
+}
+
+.wallet-adapter-button[disabled] {
+  background: var(--color-border) !important;
+  color: var(--color-subtle) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: rgb(26 29 28 / 0.45) !important;
+  backdrop-filter: blur(2px);
+  z-index: 110 !important;
+}
+
+.wallet-adapter-modal {
+  background: var(--color-surface) !important;
+  color: var(--color-fg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: 0 18px 48px rgb(26 29 28 / 0.14) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--color-fg) !important;
+  font-weight: 600 !important;
+}
+
+.wallet-adapter-modal-list {
+  margin: 0 0 8px !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background: var(--color-elevated) !important;
+  color: var(--color-fg) !important;
+  border: 1px solid var(--color-border) !important;
+  font-size: 14px !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: var(--color-bg) !important;
+  border-color: color-mix(
+    in oklab,
+    var(--color-primary) 40%,
+    var(--color-border)
+  ) !important;
+}
+
+.wallet-adapter-modal-list-more {
+  color: var(--color-primary) !important;
+  cursor: pointer;
+}
+
+.wallet-adapter-modal-button-close {
+  background: var(--color-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.wallet-adapter-modal-button-close svg {
+  fill: var(--color-muted) !important;
+}
+
+.wallet-adapter-modal-middle-button {
+  background: var(--color-primary) !important;
+  color: var(--color-primary-fg) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 10px 28px rgb(26 29 28 / 0.1) !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  color: var(--color-fg) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background: var(--color-elevated) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

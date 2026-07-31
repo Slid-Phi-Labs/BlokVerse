@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { GameBoard } from "./GameBoard";
 import { Hud } from "./Hud";
+import { FarcasterSignIn } from "@/components/farcaster/FarcasterSignIn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useFarcasterOptional } from "@/lib/farcaster/provider";
 import { useGameStore } from "@/lib/game/store";
 import {
   ASSETS,
@@ -49,8 +51,10 @@ export function PlayPanel() {
   const lastBreakdown = useGameStore((s) => s.lastBreakdown);
   const playerName = useGameStore((s) => s.playerName);
   const setPlayerName = useGameStore((s) => s.setPlayerName);
+  const farcaster = useGameStore((s) => s.farcaster);
   const balance = useGameStore((s) => s.balance);
   const hasHydrated = useGameStore((s) => s.hasHydrated);
+  const fc = useFarcasterOptional();
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -91,9 +95,19 @@ export function PlayPanel() {
               get <span className="text-[var(--color-primary)]">5:00</span> on the
               clock. Finish with few clicks to multiply leftover time into score.
               Time out? Round score uses how many optimal clicks remain.
+              {fc?.isInMiniApp ? (
+                <>
+                  {" "}
+                  <span className="text-[var(--color-primary)]">
+                    Running as a Farcaster mini app.
+                  </span>
+                </>
+              ) : null}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <FarcasterSignIn variant="panel" />
+
             <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
@@ -104,7 +118,14 @@ export function PlayPanel() {
                   onChange={(e) => setPlayerName(e.target.value)}
                   maxLength={18}
                   placeholder="Your handle"
+                  disabled={Boolean(farcaster)}
                 />
+                {farcaster ? (
+                  <p className="text-[11px] text-[var(--color-muted)]">
+                    Locked to Farcaster identity (fid {farcaster.fid}). Sign out
+                    to edit manually.
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-elevated)] px-4 py-3 text-sm">
                 <div className="text-[11px] uppercase tracking-wide text-[var(--color-subtle)]">

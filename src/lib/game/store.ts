@@ -14,11 +14,13 @@ import {
   claimStatus,
 } from "./rewards";
 import {
-  connectPhantom,
-  disconnectPhantom,
+  connectSolanaWallet,
+  disconnectSolanaWallet,
   fetchBlokzBalance,
+  isValidSolanaAddress,
   SOLANA_TOKEN,
 } from "./solana";
+import type { FarcasterAuthMode } from "@/lib/farcaster/types";
 import {
   type ChatMessage,
   type Difficulty,
@@ -38,19 +40,27 @@ export type AppTab =
   | "chat";
 export type GamePhase = "menu" | "playing" | "won" | "lost";
 
+/** Lightweight Farcaster identity mirrored into the game store for HUD / lock name. */
+export type GameFarcasterIdentity = {
+  fid: number;
+  username: string | null;
+  displayName: string | null;
+  pfpUrl: string | null;
+  mode: FarcasterAuthMode;
+};
+
 interface GameStore {
   playerName: string;
   setPlayerName: (name: string) => void;
 
+  farcaster: GameFarcasterIdentity | null;
+  setFarcasterIdentity: (identity: GameFarcasterIdentity) => void;
+  clearFarcasterIdentity: () => void;
+
   tab: AppTab;
   setTab: (tab: AppTab) => void;
 
-  /** Forge / play credits (earned in-game). Not the Solana mint. */
   balance: number;
-  /**
-   * Staked amount of on-chain $bLOkz (mint).
-   * Must not exceed last known free token balance at stake time.
-   */
   staked: number;
   stakedAt: number | null;
   pendingStakeRewards: number;
@@ -59,9 +69,8 @@ interface GameStore {
   totalRewardsClaimed: number;
   walletStartedAt: number;
 
-  /** Phantom / Solana */
   walletAddress: string | null;
-  /** Free (unstaked) on-chain $bLOkz UI amount */
+  walletMethod: "extension" | "manual" | null;
   tokenBalance: number;
   tokenDecimals: number;
   tokenLoading: boolean;
@@ -69,6 +78,10 @@ interface GameStore {
   lastTokenSyncAt: number | null;
 
   connectWallet: () => Promise<{ ok: boolean; error?: string }>;
+  /** Paste-a-wallet when extension can't inject (iframe). Read-only balance. */
+  linkWalletAddress: (
+    address: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   disconnectWallet: () => Promise<void>;
   refreshTokenBalance: () => Promise<void>;
 
@@ -215,8 +228,13 @@ function endRound(
     balance: state.balance + breakdown.reward,
   });
 
+  const displayName =
+    state.farcaster?.username ||
+    state.farcaster?.displayName ||
+    state.playerName;
+
   get().submitScore({
-    name: state.playerName,
+    name: displayName,
     score: breakdown.score,
     timeMs: elapsedMs,
     moves: state.moves,
@@ -244,14 +262,16 @@ function markHydrated() {
   } catch {
     // ignore
   }
-  // Refresh chain balance if wallet already connected
   const s = useGameStore.getState();
   if (s.walletAddress) {
     void s.refreshTokenBalance();
   }
 }
 
-function syncAccrual(get: () => GameStore, set: (p: Partial<GameStore>) => void) {
+function syncAccrual(
+  get: () => GameStore,
+  set: (p: Partial<GameStore>) => void,
+) {
   const s = get();
   if (s.staked <= 0) return;
   const next = accruePending(
@@ -271,6 +291,10 @@ export const useGameStore = create<GameStore>()(
       playerName: "You",
       setPlayerName: (name) => set({ playerName: name.slice(0, 18) || "You" }),
 
+      farcaster: null,
+      setFarcasterIdentity: (identity) => set({ farcaster: identity }),
+      clearFarcasterIdentity: () => set({ farcaster: null }),
+
       tab: "play",
       setTab: (tab) => set({ tab }),
 
@@ -284,17 +308,23 @@ export const useGameStore = create<GameStore>()(
       walletStartedAt: Date.now(),
 
       walletAddress: null,
+      walletMethod: null,
       tokenBalance: 0,
       tokenDecimals: SOLANA_TOKEN.decimals,
       tokenLoading: false,
       tokenError: null,
       lastTokenSyncAt: null,
 
+      /** Fallback connect (prefers wallet-adapter UI via WalletConnectModal). */
       connectWallet: async () => {
         try {
           set({ tokenLoading: true, tokenError: null });
-          const address = await connectPhantom();
-          set({ walletAddress: address, tokenLoading: false });
+          const { address, method } = await connectSolanaWallet();
+          set({
+            walletAddress: address,
+            walletMethod: method,
+            tokenLoading: false,
+          });
           await get().refreshTokenBalance();
           return { ok: true };
         } catch (e) {
@@ -304,15 +334,39 @@ export const useGameStore = create<GameStore>()(
         }
       },
 
+      linkWalletAddress: async (address) => {
+        const a = address.trim();
+        if (!isValidSolanaAddress(a)) {
+          return { ok: false, error: "Invalid Solana address" };
+        }
+        try {
+          set({
+            tokenLoading: true,
+            tokenError: null,
+            walletAddress: a,
+            walletMethod: "manual",
+          });
+          await get().refreshTokenBalance();
+          set({ tokenLoading: false });
+          return { ok: true };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Balance fetch failed";
+          set({ tokenLoading: false, tokenError: msg });
+          return { ok: false, error: msg };
+        }
+      },
+
       disconnectWallet: async () => {
         try {
-          await disconnectPhantom();
+          if (get().walletMethod === "extension") {
+            await disconnectSolanaWallet();
+          }
         } catch {
           // ignore
         }
-        // Keep stake ledger; clear free balance display
         set({
           walletAddress: null,
+          walletMethod: null,
           tokenBalance: 0,
           tokenError: null,
           lastTokenSyncAt: null,
@@ -344,18 +398,13 @@ export const useGameStore = create<GameStore>()(
         }
         const state = get();
         if (!state.walletAddress) {
-          return { ok: false, error: "Connect Phantom to stake $bLOkz" };
+          return { ok: false, error: "Connect a wallet that holds $bLOkz" };
         }
-        // Free tokens available to stake = on-chain balance (user must hold mint)
-        // Staked is tracked in-app against that mint; available = floor(tokenBalance) - already counted?
-        // Model: tokenBalance is free liquid on-chain. Stake records commitment of that mint.
-        // Max stake = floor(tokenBalance) — user should not stake more than they hold free.
-        // If already staked, they need free balance covering NEW stake only (staked is "locked" intent).
         const free = Math.floor(state.tokenBalance);
         if (a > free) {
           return {
             ok: false,
-            error: `Need ${a} free on-chain $bLOkz (mint ${SOLANA_TOKEN.shortMint}). You have ${free}.`,
+            error: `Need ${a} free on-chain $bLOkz (${SOLANA_TOKEN.shortMint}). You have ${free}.`,
           };
         }
         syncAccrual(get, set);
@@ -363,9 +412,8 @@ export const useGameStore = create<GameStore>()(
         const wasZero = state.staked <= 0;
         set({
           staked: state.staked + a,
-          // Top-up restarts 12h lock
           stakedAt: now,
-          lastAccrualAt: wasZero ? now : get().lastAccrualAt ?? now,
+          lastAccrualAt: wasZero ? now : (get().lastAccrualAt ?? now),
         });
         return { ok: true };
       },
@@ -393,11 +441,7 @@ export const useGameStore = create<GameStore>()(
           staked: next,
           stakedAt: next <= 0 ? null : get().stakedAt,
           lastAccrualAt: next <= 0 ? null : get().lastAccrualAt,
-          pendingStakeRewards: next <= 0 ? get().pendingStakeRewards : get().pendingStakeRewards,
         });
-        // If fully unstaked, leave pending claimable still as staker until claimed? 
-        // Better: convert pending to claimable via claimRewards only while staked.
-        // On full unstake, auto-pay pending into forge balance (game rewards wallet).
         if (next <= 0) {
           const s = get();
           const paid = Math.floor(s.pendingStakeRewards);
@@ -415,7 +459,6 @@ export const useGameStore = create<GameStore>()(
       },
 
       claimRewards: () => {
-        const state = get();
         syncAccrual(get, set);
         const s = get();
         const status = claimStatus(
@@ -437,16 +480,12 @@ export const useGameStore = create<GameStore>()(
           const amount = status.amount;
           set({
             balance: s.balance + amount,
-            pendingStakeRewards: Math.max(
-              0,
-              s.pendingStakeRewards - amount,
-            ),
+            pendingStakeRewards: Math.max(0, s.pendingStakeRewards - amount),
             lastAccrualAt: Date.now(),
             totalRewardsClaimed: s.totalRewardsClaimed + amount,
           });
           return { ok: true, amount, tier: "staker" };
         }
-        // Non-staker monthly — requires wallet + holding mint preferred
         if (!s.walletAddress) {
           return { ok: false, error: "Connect wallet holding $bLOkz" };
         }
@@ -518,9 +557,7 @@ export const useGameStore = create<GameStore>()(
           lastResult: result,
           lastClicksAway: away,
         });
-        if (result.isSolved) {
-          endRound(get, set, true);
-        }
+        if (result.isSolved) endRound(get, set, true);
       },
 
       useHint: () => {
@@ -544,9 +581,7 @@ export const useGameStore = create<GameStore>()(
           lastResult: result,
           lastClicksAway: away,
         });
-        if (result.isSolved) {
-          endRound(get, set, true);
-        }
+        if (result.isSolved) endRound(get, set, true);
         return { ok: true };
       },
 
@@ -597,40 +632,46 @@ export const useGameStore = create<GameStore>()(
         const incomplete = [...get().timeboard, row]
           .filter((e) => !e.completed)
           .sort((a, b) => a.timeMs - b.timeMs);
-        const timeboard = [...completed, ...incomplete].slice(0, 50);
-        set({ scoreboard, timeboard });
+        set({
+          scoreboard,
+          timeboard: [...completed, ...incomplete].slice(0, 50),
+        });
       },
 
       chat: SEED_CHAT,
       postChat: (text) => {
         const cleaned = text.trim().slice(0, 240);
         if (!cleaned) return { ok: false, error: "Message is empty" };
-        const { staked, playerName, chat, walletAddress } = get();
+        const { staked, playerName, chat, walletAddress, farcaster } = get();
         if (!walletAddress) {
           return { ok: false, error: "Connect wallet first" };
         }
         if (staked <= 0) {
-          return {
-            ok: false,
-            error: "Stake $bLOkz (Solana mint) to post",
-          };
+          return { ok: false, error: "Stake $bLOkz to post" };
         }
-        const msg: ChatMessage = {
-          id: uid("chat"),
-          author: playerName,
-          text: cleaned,
-          at: Date.now(),
-          staked,
-        };
-        set({ chat: [...chat, msg].slice(-200) });
+        const author =
+          farcaster?.username || farcaster?.displayName || playerName;
+        set({
+          chat: [
+            ...chat,
+            {
+              id: uid("chat"),
+              author,
+              text: cleaned,
+              at: Date.now(),
+              staked,
+            },
+          ].slice(-200),
+        });
         return { ok: true };
       },
     }),
     {
-      name: "blok-chain-v9-sol",
+      name: "blok-chain-v11-wallet-adapter",
       storage: gameStorage,
       partialize: (s) => ({
         playerName: s.playerName,
+        farcaster: s.farcaster,
         balance: s.balance,
         staked: s.staked,
         stakedAt: s.stakedAt,
@@ -640,6 +681,7 @@ export const useGameStore = create<GameStore>()(
         totalRewardsClaimed: s.totalRewardsClaimed,
         walletStartedAt: s.walletStartedAt,
         walletAddress: s.walletAddress,
+        walletMethod: s.walletMethod,
         difficulty: s.difficulty,
         scoreboard: s.scoreboard,
         timeboard: s.timeboard,
