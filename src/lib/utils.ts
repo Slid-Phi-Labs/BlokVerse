@@ -6,7 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatNumber(n: number, digits = 0): string {
-  return n.toLocaleString(undefined, {
+  const v = Number.isFinite(n) ? n : 0;
+  return v.toLocaleString(undefined, {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   });
