@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
+import { FarcasterProvider } from "@/lib/farcaster/provider";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -16,10 +17,22 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Compile random crypto blocks into one solid chain. Timed ranked play, top 50 leaderboards, stake $bLOkz, validator chat.",
+          "Compile random crypto blocks into one solid chain. Timed ranked play, top 50 leaderboards, stake $bLOkz, Farcaster mini app.",
       },
       { name: "theme-color", content: "#e8eae8" },
       { name: "color-scheme", content: "light" },
+      // Farcaster / mini app discovery helpers
+      { name: "fc:frame", content: "vNext" },
+      {
+        property: "og:title",
+        content: "bLOK CHaiN — forge · stake · $bLOkz",
+      },
+      {
+        property: "og:description",
+        content:
+          "Puzzle forge mini app on Farcaster. Solidify the chain, climb the top 50, stake $bLOkz on Solana.",
+      },
+      { property: "og:image", content: "/logo-blok-192.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -39,7 +52,9 @@ function RootDocument() {
       </head>
       <body className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] antialiased">
         <AuthProvider>
-          <Outlet />
+          <FarcasterProvider>
+            <Outlet />
+          </FarcasterProvider>
         </AuthProvider>
         <Scripts />
       </body>

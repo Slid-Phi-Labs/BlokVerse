@@ -4,6 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
+import path from "node:path";
 
 /**
  * Finish PGLite bootstrap during dev-server setup (before traffic). Vite awaits
@@ -26,6 +27,67 @@ function pgliteBootstrapPlugin(): Plugin {
         console.error("[app-builder] DB bootstrap failed:", err);
         throw err;
       }
+    },
+  };
+}
+
+/**
+ * Serve /.well-known/farcaster.json with host-aware absolute URLs in dev
+ * (Cloudflare tunnels change host often). Production uses public/ static file.
+ */
+function farcasterManifestPlugin(): Plugin {
+  return {
+    name: "app-builder:farcaster-manifest",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly !== "/.well-known/farcaster.json") {
+          next();
+          return;
+        }
+        if ((req.method ?? "GET").toUpperCase() !== "GET") {
+          res.statusCode = 405;
+          res.end("Method Not Allowed");
+          return;
+        }
+
+        const host = String(
+          req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080",
+        );
+        const proto = String(
+          req.headers["x-forwarded-proto"] ??
+            ((req.socket as { encrypted?: boolean } | undefined)?.encrypted
+              ? "https"
+              : "http"),
+        );
+        const origin = `${proto}://${host}`.replace(/\/$/, "");
+
+        const body = {
+          miniapp: {
+            version: "1",
+            name: "bLOK CHaiN",
+            homeUrl: origin,
+            iconUrl: `${origin}/logo-blok-192.png`,
+            splashImageUrl: `${origin}/logo-blok-192.png`,
+            splashBackgroundColor: "#e8eae8",
+            subtitle: "Forge blocks into one chain",
+            description:
+              "Compile random crypto blocks into one solid chain. Timed ranked play, top 50 boards, stake $bLOkz on Solana.",
+            primaryCategory: "gamess",
+            tags: ["puzzle", "solana", "blokz", "game", "crypto"],
+            tagline: "Solidify the chain",
+            ogTitle: "bLOK CHaiN",
+            ogDescription: "Forge · stake · top 50 — $bLOkz puzzle mini app",
+            ogImageUrl: `${origin}/logo-blok-192.png`,
+          },
+        };
+
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(JSON.stringify(body, null, 2));
+      });
     },
   };
 }
@@ -130,9 +192,30 @@ export default defineConfig(({ command }) => ({
     strictPort: true,
     allowedHosts: true,
   },
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    alias: {
+      buffer: path.resolve("node_modules/buffer"),
+    },
+  },
+  optimizeDeps: {
+    include: [
+      "buffer",
+      "@solana/web3.js",
+      "@solana/wallet-adapter-base",
+      "@solana/wallet-adapter-react",
+      "@solana/wallet-adapter-react-ui",
+      "@solana/wallet-adapter-phantom",
+      "@solana/wallet-adapter-solflare",
+    ],
+  },
+  define: {
+    "process.env": {},
+    global: "globalThis",
+  },
   plugins: [
     pgliteBootstrapPlugin(),
+    farcasterManifestPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     tailwindcss(),
