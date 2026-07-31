@@ -10,8 +10,8 @@ export const SOLANA_TOKEN = {
   mint: "5tX5u37fxBPV6wGwuU5pzn9oZuvqXmH4trGvmhUnDwf9",
   decimals: 6 as number,
   tokenProgram: TOKEN_2022_PROGRAM,
-  /** Canonical site for token metadata (update pump.fun website to this). */
-  website: "https://ceedot-rock.github.io/blokz",
+  /** Play host — Farcaster mini app (farcaster.json homeUrl). */
+  website: "https://sam-camel-recovery-idaho.trycloudflare.com",
   tradeUrl:
     "https://pump.fun/coin/5tX5u37fxBPV6wGwuU5pzn9oZuvqXmH4trGvmhUnDwf9",
   chartUrl:
