@@ -5,7 +5,7 @@
  * pump.fun IPFS website is locked to https://blok.grok.app (404) — cannot change without new mint.
  */
 export const GAME_URL =
-  "https://sam-camel-recovery-idaho.trycloudflare.com";
+  "https://blok.grok.me";
 
 /** Farcaster Mini App origin (same as GAME_URL while on this tunnel). */
 export const FARCASTER_HOME_URL = GAME_URL;
