@@ -1,14 +1,17 @@
 /**
  * Live on-chain $bLOkz (Solana V2 — pump.fun).
  *
- * Canonical play host = Farcaster mini app tunnel (homeUrl in farcaster.json).
- * pump.fun IPFS website is locked to https://blok.grok.app (404) — cannot change without new mint.
+ * bLOK is NOT listed on Farcaster/Warpcast. FARCASTER.md + farcaster.json are
+ * scaffold only. Live play is a Cloudflare tunnel when the session is up.
+ *
+ * pump.fun IPFS website is locked to https://blok.grok.app (404) — immutable at mint.
  */
+/** Live play (tunnel) — session-scoped; not permanent hosting */
 export const GAME_URL =
   "https://blok.grok.me";
 
-/** Farcaster Mini App origin (same as GAME_URL while on this tunnel). */
-export const FARCASTER_HOME_URL = GAME_URL;
+/** Source of truth for code */
+export const CODE_URL = "https://github.com/ceedot-rock/blokz";
 
 /** Immutable on pump IPFS — do not use for new product links */
 export const GROK_APP_URL_LOCKED = "https://blok.grok.app";
@@ -19,7 +22,7 @@ export const BLOKZ_ONCHAIN = {
   symbol: "bLOkz",
   mint: "5tX5u37fxBPV6wGwuU5pzn9oZuvqXmH4trGvmhUnDwf9",
   website: GAME_URL,
-  farcaster: FARCASTER_HOME_URL,
+  code: CODE_URL,
   pumpIpfsWebsite: GROK_APP_URL_LOCKED,
   pumpUrl: "https://pump.fun/5tX5u37fxBPV6wGwuU5pzn9oZuvqXmH4trGvmhUnDwf9",
   solscanMint:
@@ -30,7 +33,8 @@ export const BLOKZ_ONCHAIN = {
     "https://ipfs.io/ipfs/bafkreifxwmrx3cgam4a5pof4kqr33uzic2gczhfoj4rmtkwnoulxpit74e",
   creator: "96V9SjAHLkQ7ZFqk6HFNHeVtz2YBi8DjevRqYjGaVUbx",
   platform: "pump.fun",
-  neynar: true,
+  /** Scaffold only — not published as a Farcaster Mini App */
+  farcasterMiniApp: false,
   launchedAt: "2026-07-31T00:07:05.399Z",
   baseV1Token: "0x9385cB183329C386391787D0f919a02C750A51CB",
 } as const;
