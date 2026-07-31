@@ -25,3 +25,84 @@ export const SOLANA_TOKEN = {
     "https://solana-mainnet.g.alchemy.com/v2/demo",
   ],
 } as const;
+
+export function shortAddress(addr: string, n = 4): string {
+  if (addr.length < n * 2 + 3) return addr;
+  return `${addr.slice(0, n)}…${addr.slice(-n)}`;
+}
+
+export function formatTokenAmount(n: number, maxDigits = 4): string {
+  if (!Number.isFinite(n)) return "0";
+  if (n === 0) return "0";
+  if (n >= 1_000_000)
+    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n >= 1)
+    return n.toLocaleString(undefined, {
+      maximumFractionDigits: Math.min(2, maxDigits),
+    });
+  return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits });
+}
+
+export function isValidSolanaAddress(addr: string): boolean {
+  const a = addr.trim();
+  if (a.length < 32 || a.length > 44) return false;
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(a);
+}
+
+export type SolanaProvider = {
+  isPhantom?: boolean;
+  isSolflare?: boolean;
+  publicKey?: { toString(): string } | null;
+  connect: (opts?: {
+    onlyIfTrusted?: boolean;
+  }) => Promise<{ publicKey: { toString(): string } }>;
+  disconnect?: () => Promise<void>;
+};
+
+export function isEmbeddedFrame(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+export function getSolanaProvider(): SolanaProvider | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    phantom?: { solana?: SolanaProvider };
+    solana?: SolanaProvider & { providers?: SolanaProvider[] };
+    solflare?: SolanaProvider;
+    backpack?: SolanaProvider;
+  };
+  if (w.phantom?.solana?.isPhantom) return w.phantom.solana;
+  if (w.solana?.isPhantom) return w.solana;
+  const list = w.solana?.providers;
+  if (Array.isArray(list) && list.length) {
+    const phantom = list.find((p) => p?.isPhantom);
+    if (phantom) return phantom;
+    if (typeof list[0]?.connect === "function") return list[0];
+  }
+  if (w.solflare?.isSolflare) return w.solflare;
+  if (w.backpack && typeof w.backpack.connect === "function") return w.backpack;
+  if (w.solana && typeof w.solana.connect === "function") return w.solana;
+  return null;
+}
+
+export function waitForSolanaProvider(
+  timeoutMs = 3000,
+): Promise<SolanaProvider | null> {
+  const existing = getSolanaProvider();
+  if (existing) return Promise.resolve(existing);
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const id = window.setInterval(() => {
+      const p = getSolanaProvider();
+      if (p || Date.now() - start > timeoutMs) {
+        window.clearInterval(id);
+        resolve(p);
+      }
+    }, 100);
+  });
+}
