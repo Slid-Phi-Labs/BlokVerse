@@ -5,7 +5,7 @@
  * (forge, stake yield, monthly drip) draw from the Play / Staking / Community
  * buckets. In-app rewards use the same ratios.
  *
- * Live Solana mint (pump.fun): see onchain.ts — game site https://blok.grok.app
+ * Live Solana mint (pump.fun): see onchain.ts — game site https://github.com/ceedot-rock/blokz
  */
 
 import { BLOKZ_ONCHAIN, GAME_URL } from "./onchain";
