@@ -1,15 +1,13 @@
-/** Minimum time tokens must stay staked before unstake. */
-export const STAKE_LOCK_MS = 12 * 60 * 60 * 1000; // 12 hours
-/** Staker reward cadence. */
+/** Minimum stake lock before unstake / first staker claim. */
+export const STAKE_LOCK_MS = 12 * 60 * 60 * 1000; // 12h
 export const DAILY_REWARD_MS = 24 * 60 * 60 * 1000;
-/** Non-staker community reward cadence. */
 export const MONTHLY_REWARD_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Flat monthly drip for wallets with zero stake. */
+/** Monthly drip for wallets holding the mint but with zero stake. */
 export const MONTHLY_NON_STAKER_REWARD = 75;
-/** Daily yield rate for stakers (2% of stake, min 15). */
+/** Daily yield rate while staked (continuous accrual). */
 export const DAILY_STAKE_RATE = 0.02;
-export const DAILY_STAKE_MIN = 15;
+export const MIN_STAKE_CLAIM = 1;
 
 export type RewardTier = "staker" | "non-staker";
 
@@ -35,50 +33,124 @@ export function canUnstake(
   stakedAt: number | null,
   now = Date.now(),
 ): { ok: boolean; unlockAt: number | null; waitMs: number } {
-  if (staked <= 0) {
-    return { ok: false, unlockAt: null, waitMs: 0 };
-  }
+  if (staked <= 0) return { ok: false, unlockAt: null, waitMs: 0 };
   const unlockAt = stakeUnlockAt(stakedAt);
-  if (unlockAt == null) {
-    return { ok: true, unlockAt: null, waitMs: 0 };
-  }
+  if (unlockAt == null) return { ok: true, unlockAt: null, waitMs: 0 };
   const waitMs = unlockAt - now;
-  if (waitMs > 0) {
-    return { ok: false, unlockAt, waitMs };
-  }
+  if (waitMs > 0) return { ok: false, unlockAt, waitMs };
   return { ok: true, unlockAt, waitMs: 0 };
 }
 
-export function nextClaimAt(
+export function accruePending(
   staked: number,
-  lastDailyClaimAt: number | null,
-  lastMonthlyClaimAt: number | null,
-): { tier: RewardTier; nextAt: number | null; ready: boolean } {
-  if (staked > 0) {
-    if (lastDailyClaimAt == null) {
-      return { tier: "staker", nextAt: null, ready: true };
-    }
-    const nextAt = lastDailyClaimAt + DAILY_REWARD_MS;
-    return {
-      tier: "staker",
-      nextAt,
-      ready: Date.now() >= nextAt,
-    };
+  pending: number,
+  lastAccrualAt: number | null,
+  now = Date.now(),
+): { pending: number; lastAccrualAt: number } {
+  if (staked <= 0 || lastAccrualAt == null) {
+    return { pending: Math.max(0, pending), lastAccrualAt: now };
   }
-  if (lastMonthlyClaimAt == null) {
-    return { tier: "non-staker", nextAt: null, ready: true };
-  }
-  const nextAt = lastMonthlyClaimAt + MONTHLY_REWARD_MS;
+  const elapsed = Math.max(0, now - lastAccrualAt);
+  const earned = staked * DAILY_STAKE_RATE * (elapsed / DAILY_REWARD_MS);
   return {
-    tier: "non-staker",
-    nextAt,
-    ready: Date.now() >= nextAt,
+    pending: Math.max(0, pending) + earned,
+    lastAccrualAt: now,
   };
 }
 
-export function computeClaimAmount(staked: number): number {
+export function previewPending(
+  staked: number,
+  pending: number,
+  lastAccrualAt: number | null,
+  now = Date.now(),
+): number {
+  return accruePending(staked, pending, lastAccrualAt, now).pending;
+}
+
+export function claimStatus(
+  staked: number,
+  stakedAt: number | null,
+  pending: number,
+  lastAccrualAt: number | null,
+  lastMonthlyClaimAt: number | null,
+  walletStartedAt: number,
+  now = Date.now(),
+): {
+  tier: RewardTier;
+  ready: boolean;
+  amount: number;
+  nextAt: number | null;
+  reason?: string;
+  pendingPreview: number;
+} {
   if (staked > 0) {
-    return Math.max(DAILY_STAKE_MIN, Math.floor(staked * DAILY_STAKE_RATE));
+    const { pending: pendingNow } = accruePending(
+      staked,
+      pending,
+      lastAccrualAt,
+      now,
+    );
+    const unlockAt = stakeUnlockAt(stakedAt);
+    const lockWait = unlockAt != null ? unlockAt - now : 0;
+
+    if (lockWait > 0) {
+      return {
+        tier: "staker",
+        ready: false,
+        amount: 0,
+        nextAt: unlockAt,
+        reason: "12h stake lock before first claim / unstake",
+        pendingPreview: pendingNow,
+      };
+    }
+
+    const amount = Math.floor(pendingNow);
+    if (amount < MIN_STAKE_CLAIM) {
+      const perMs = (staked * DAILY_STAKE_RATE) / DAILY_REWARD_MS;
+      const need = MIN_STAKE_CLAIM - pendingNow;
+      const waitMs = perMs > 0 ? Math.ceil(need / perMs) : DAILY_REWARD_MS;
+      return {
+        tier: "staker",
+        ready: false,
+        amount: 0,
+        nextAt: now + waitMs,
+        reason: "Yield accruing on staked $bLOkz…",
+        pendingPreview: pendingNow,
+      };
+    }
+
+    return {
+      tier: "staker",
+      ready: true,
+      amount,
+      nextAt: null,
+      pendingPreview: pendingNow,
+    };
   }
-  return MONTHLY_NON_STAKER_REWARD;
+
+  const anchor = lastMonthlyClaimAt ?? walletStartedAt;
+  const nextAt = anchor + MONTHLY_REWARD_MS;
+  if (now < nextAt) {
+    return {
+      tier: "non-staker",
+      ready: false,
+      amount: MONTHLY_NON_STAKER_REWARD,
+      nextAt,
+      reason: "Monthly drip for holders with 0 staked",
+      pendingPreview: 0,
+    };
+  }
+  return {
+    tier: "non-staker",
+    ready: true,
+    amount: MONTHLY_NON_STAKER_REWARD,
+    nextAt: null,
+    pendingPreview: 0,
+  };
+}
+
+/** Estimated full-day yield for UI (not claim amount). */
+export function estimateDailyYield(staked: number): number {
+  if (staked <= 0) return 0;
+  return Math.floor(staked * DAILY_STAKE_RATE);
 }

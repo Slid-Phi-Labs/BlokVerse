@@ -9,10 +9,16 @@ import {
   scoreRound,
 } from "./engine";
 import {
+  accruePending,
   canUnstake,
-  computeClaimAmount,
-  nextClaimAt,
+  claimStatus,
 } from "./rewards";
+import {
+  connectPhantom,
+  disconnectPhantom,
+  fetchBlokzBalance,
+  SOLANA_TOKEN,
+} from "./solana";
 import {
   type ChatMessage,
   type Difficulty,
@@ -39,12 +45,32 @@ interface GameStore {
   tab: AppTab;
   setTab: (tab: AppTab) => void;
 
+  /** Forge / play credits (earned in-game). Not the Solana mint. */
   balance: number;
+  /**
+   * Staked amount of on-chain $bLOkz (mint).
+   * Must not exceed last known free token balance at stake time.
+   */
   staked: number;
   stakedAt: number | null;
-  lastDailyClaimAt: number | null;
+  pendingStakeRewards: number;
+  lastAccrualAt: number | null;
   lastMonthlyClaimAt: number | null;
   totalRewardsClaimed: number;
+  walletStartedAt: number;
+
+  /** Phantom / Solana */
+  walletAddress: string | null;
+  /** Free (unstaked) on-chain $bLOkz UI amount */
+  tokenBalance: number;
+  tokenDecimals: number;
+  tokenLoading: boolean;
+  tokenError: string | null;
+  lastTokenSyncAt: number | null;
+
+  connectWallet: () => Promise<{ ok: boolean; error?: string }>;
+  disconnectWallet: () => Promise<void>;
+  refreshTokenBalance: () => Promise<void>;
 
   stake: (amount: number) => { ok: boolean; error?: string };
   unstake: (amount: number) => { ok: boolean; error?: string };
@@ -218,6 +244,25 @@ function markHydrated() {
   } catch {
     // ignore
   }
+  // Refresh chain balance if wallet already connected
+  const s = useGameStore.getState();
+  if (s.walletAddress) {
+    void s.refreshTokenBalance();
+  }
+}
+
+function syncAccrual(get: () => GameStore, set: (p: Partial<GameStore>) => void) {
+  const s = get();
+  if (s.staked <= 0) return;
+  const next = accruePending(
+    s.staked,
+    s.pendingStakeRewards,
+    s.lastAccrualAt,
+  );
+  set({
+    pendingStakeRewards: next.pending,
+    lastAccrualAt: next.lastAccrualAt,
+  });
 }
 
 export const useGameStore = create<GameStore>()(
@@ -229,26 +274,98 @@ export const useGameStore = create<GameStore>()(
       tab: "play",
       setTab: (tab) => set({ tab }),
 
-      balance: 1500,
+      balance: 0,
       staked: 0,
       stakedAt: null,
-      lastDailyClaimAt: null,
+      pendingStakeRewards: 0,
+      lastAccrualAt: null,
       lastMonthlyClaimAt: null,
       totalRewardsClaimed: 0,
+      walletStartedAt: Date.now(),
+
+      walletAddress: null,
+      tokenBalance: 0,
+      tokenDecimals: SOLANA_TOKEN.decimals,
+      tokenLoading: false,
+      tokenError: null,
+      lastTokenSyncAt: null,
+
+      connectWallet: async () => {
+        try {
+          set({ tokenLoading: true, tokenError: null });
+          const address = await connectPhantom();
+          set({ walletAddress: address, tokenLoading: false });
+          await get().refreshTokenBalance();
+          return { ok: true };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Wallet connect failed";
+          set({ tokenLoading: false, tokenError: msg });
+          return { ok: false, error: msg };
+        }
+      },
+
+      disconnectWallet: async () => {
+        try {
+          await disconnectPhantom();
+        } catch {
+          // ignore
+        }
+        // Keep stake ledger; clear free balance display
+        set({
+          walletAddress: null,
+          tokenBalance: 0,
+          tokenError: null,
+          lastTokenSyncAt: null,
+        });
+      },
+
+      refreshTokenBalance: async () => {
+        const addr = get().walletAddress;
+        if (!addr) return;
+        try {
+          set({ tokenLoading: true, tokenError: null });
+          const bal = await fetchBlokzBalance(addr);
+          set({
+            tokenBalance: bal.uiAmount,
+            tokenDecimals: bal.decimals,
+            tokenLoading: false,
+            lastTokenSyncAt: Date.now(),
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Balance fetch failed";
+          set({ tokenLoading: false, tokenError: msg });
+        }
+      },
 
       stake: (amount) => {
         const a = Math.floor(amount);
         if (!Number.isFinite(a) || a <= 0) {
           return { ok: false, error: "Enter a positive amount" };
         }
-        const { balance, staked } = get();
-        if (a > balance) {
-          return { ok: false, error: "Insufficient $bLOkz balance" };
+        const state = get();
+        if (!state.walletAddress) {
+          return { ok: false, error: "Connect Phantom to stake $bLOkz" };
         }
+        // Free tokens available to stake = on-chain balance (user must hold mint)
+        // Staked is tracked in-app against that mint; available = floor(tokenBalance) - already counted?
+        // Model: tokenBalance is free liquid on-chain. Stake records commitment of that mint.
+        // Max stake = floor(tokenBalance) — user should not stake more than they hold free.
+        // If already staked, they need free balance covering NEW stake only (staked is "locked" intent).
+        const free = Math.floor(state.tokenBalance);
+        if (a > free) {
+          return {
+            ok: false,
+            error: `Need ${a} free on-chain $bLOkz (mint ${SOLANA_TOKEN.shortMint}). You have ${free}.`,
+          };
+        }
+        syncAccrual(get, set);
+        const now = Date.now();
+        const wasZero = state.staked <= 0;
         set({
-          balance: balance - a,
-          staked: staked + a,
-          stakedAt: Date.now(),
+          staked: state.staked + a,
+          // Top-up restarts 12h lock
+          stakedAt: now,
+          lastAccrualAt: wasZero ? now : get().lastAccrualAt ?? now,
         });
         return { ok: true };
       },
@@ -258,11 +375,11 @@ export const useGameStore = create<GameStore>()(
         if (!Number.isFinite(a) || a <= 0) {
           return { ok: false, error: "Enter a positive amount" };
         }
-        const { balance, staked, stakedAt } = get();
-        if (a > staked) {
-          return { ok: false, error: "Not enough staked" };
+        const state = get();
+        if (a > state.staked) {
+          return { ok: false, error: "Not enough staked $bLOkz" };
         }
-        const lock = canUnstake(staked, stakedAt);
+        const lock = canUnstake(state.staked, state.stakedAt);
         if (!lock.ok) {
           const hrs = Math.ceil(lock.waitMs / (60 * 60 * 1000));
           return {
@@ -270,47 +387,76 @@ export const useGameStore = create<GameStore>()(
             error: `12h minimum stake lock — unlocks in ~${hrs}h`,
           };
         }
-        const next = staked - a;
+        syncAccrual(get, set);
+        const next = get().staked - a;
         set({
-          balance: balance + a,
           staked: next,
-          stakedAt: next <= 0 ? null : stakedAt,
+          stakedAt: next <= 0 ? null : get().stakedAt,
+          lastAccrualAt: next <= 0 ? null : get().lastAccrualAt,
+          pendingStakeRewards: next <= 0 ? get().pendingStakeRewards : get().pendingStakeRewards,
         });
+        // If fully unstaked, leave pending claimable still as staker until claimed? 
+        // Better: convert pending to claimable via claimRewards only while staked.
+        // On full unstake, auto-pay pending into forge balance (game rewards wallet).
+        if (next <= 0) {
+          const s = get();
+          const paid = Math.floor(s.pendingStakeRewards);
+          if (paid > 0) {
+            set({
+              balance: s.balance + paid,
+              pendingStakeRewards: 0,
+              totalRewardsClaimed: s.totalRewardsClaimed + paid,
+            });
+          } else {
+            set({ pendingStakeRewards: 0 });
+          }
+        }
         return { ok: true };
       },
 
       claimRewards: () => {
         const state = get();
-        const schedule = nextClaimAt(
-          state.staked,
-          state.lastDailyClaimAt,
-          state.lastMonthlyClaimAt,
+        syncAccrual(get, set);
+        const s = get();
+        const status = claimStatus(
+          s.staked,
+          s.stakedAt,
+          s.pendingStakeRewards,
+          s.lastAccrualAt,
+          s.lastMonthlyClaimAt,
+          s.walletStartedAt,
         );
-        if (!schedule.ready) {
+        if (!status.ready) {
           return {
             ok: false,
-            error:
-              schedule.tier === "staker"
-                ? "Daily staker claim not ready yet"
-                : "Monthly non-staker claim not ready yet",
+            error: status.reason ?? "Not ready to claim",
+            tier: status.tier,
           };
         }
-        const amount = computeClaimAmount(state.staked);
-        const now = Date.now();
-        if (schedule.tier === "staker") {
+        if (status.tier === "staker") {
+          const amount = status.amount;
           set({
-            balance: state.balance + amount,
-            lastDailyClaimAt: now,
-            totalRewardsClaimed: state.totalRewardsClaimed + amount,
+            balance: s.balance + amount,
+            pendingStakeRewards: Math.max(
+              0,
+              s.pendingStakeRewards - amount,
+            ),
+            lastAccrualAt: Date.now(),
+            totalRewardsClaimed: s.totalRewardsClaimed + amount,
           });
-        } else {
-          set({
-            balance: state.balance + amount,
-            lastMonthlyClaimAt: now,
-            totalRewardsClaimed: state.totalRewardsClaimed + amount,
-          });
+          return { ok: true, amount, tier: "staker" };
         }
-        return { ok: true, amount, tier: schedule.tier };
+        // Non-staker monthly — requires wallet + holding mint preferred
+        if (!s.walletAddress) {
+          return { ok: false, error: "Connect wallet holding $bLOkz" };
+        }
+        const amount = status.amount;
+        set({
+          balance: s.balance + amount,
+          lastMonthlyClaimAt: Date.now(),
+          totalRewardsClaimed: s.totalRewardsClaimed + amount,
+        });
+        return { ok: true, amount, tier: "non-staker" };
       },
 
       awardTokens: (amount) => {
@@ -383,7 +529,7 @@ export const useGameStore = create<GameStore>()(
           return { ok: false, error: "No active forge" };
         }
         if (state.balance < 25) {
-          return { ok: false, error: "Need 25 $bLOkz for a hint" };
+          return { ok: false, error: "Need 25 forge $bLOkz for a hint" };
         }
         const applied = applyHint(state.board, state.solution);
         if (!applied) {
@@ -459,11 +605,14 @@ export const useGameStore = create<GameStore>()(
       postChat: (text) => {
         const cleaned = text.trim().slice(0, 240);
         if (!cleaned) return { ok: false, error: "Message is empty" };
-        const { staked, playerName, chat } = get();
+        const { staked, playerName, chat, walletAddress } = get();
+        if (!walletAddress) {
+          return { ok: false, error: "Connect wallet first" };
+        }
         if (staked <= 0) {
           return {
             ok: false,
-            error: "Stake $bLOkz to post in the validator chat",
+            error: "Stake $bLOkz (Solana mint) to post",
           };
         }
         const msg: ChatMessage = {
@@ -478,16 +627,19 @@ export const useGameStore = create<GameStore>()(
       },
     }),
     {
-      name: "blok-chain-v8",
+      name: "blok-chain-v9-sol",
       storage: gameStorage,
       partialize: (s) => ({
         playerName: s.playerName,
         balance: s.balance,
         staked: s.staked,
         stakedAt: s.stakedAt,
-        lastDailyClaimAt: s.lastDailyClaimAt,
+        pendingStakeRewards: s.pendingStakeRewards,
+        lastAccrualAt: s.lastAccrualAt,
         lastMonthlyClaimAt: s.lastMonthlyClaimAt,
         totalRewardsClaimed: s.totalRewardsClaimed,
+        walletStartedAt: s.walletStartedAt,
+        walletAddress: s.walletAddress,
         difficulty: s.difficulty,
         scoreboard: s.scoreboard,
         timeboard: s.timeboard,
@@ -523,6 +675,9 @@ export const useGameStore = create<GameStore>()(
           ...p,
           tab,
           hasHydrated: current.hasHydrated,
+          tokenLoading: false,
+          tokenError: null,
+          tokenBalance: 0,
         };
       },
       onRehydrateStorage: () => () => {

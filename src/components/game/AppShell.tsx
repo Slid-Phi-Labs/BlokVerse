@@ -8,11 +8,13 @@ import { StakePanel } from "./StakePanel";
 import { TokenomicsPanel } from "./TokenomicsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SOLANA_TOKEN } from "@/lib/game/solana";
 import { type AppTab, useGameStore } from "@/lib/game/store";
 import { cn, formatNumber } from "@/lib/utils";
 import {
   Blocks,
   Coins,
+  ExternalLink,
   MessageSquare,
   PieChart,
   Trophy,
@@ -24,7 +26,11 @@ const TABS: { id: AppTab; label: string; icon: ReactNode }[] = [
   { id: "play", label: "Forge", icon: <Blocks className="h-4 w-4" /> },
   { id: "leaderboard", label: "Top 50", icon: <Trophy className="h-4 w-4" /> },
   { id: "stake", label: "Stake", icon: <Coins className="h-4 w-4" /> },
-  { id: "tokenomics", label: "Tokenomics", icon: <PieChart className="h-4 w-4" /> },
+  {
+    id: "tokenomics",
+    label: "Tokenomics",
+    icon: <PieChart className="h-4 w-4" />,
+  },
   { id: "chat", label: "Chat", icon: <MessageSquare className="h-4 w-4" /> },
 ];
 
@@ -67,14 +73,25 @@ export function AppShell() {
             subtitle={
               phase === "playing"
                 ? "$bLOkz · forge in progress"
-                : "$bLOkz protocol puzzle"
+                : "$bLOkz on Solana"
             }
           />
 
           <div className="flex items-center gap-2">
+            <a
+              href={SOLANA_TOKEN.tradeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex"
+            >
+              <Badge variant="success" className="gap-1 cursor-pointer">
+                Solana
+                <ExternalLink className="h-3 w-3" />
+              </Badge>
+            </a>
             <Badge
               variant="muted"
-              className="hidden max-w-[8rem] truncate sm:inline-flex"
+              className="hidden max-w-[8rem] truncate md:inline-flex"
             >
               {playerName}
             </Badge>
@@ -137,7 +154,16 @@ export function AppShell() {
 
       <footer className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 pb-8 text-center text-xs text-[var(--color-subtle)] sm:px-6">
         <BrandLogo size={36} />
-        <span>bLOK CHaiN · forge · stake $bLOkz · top 50</span>
+        <span>bLOK CHaiN · forge · stake · top 50</span>
+        <a
+          href={SOLANA_TOKEN.solscanUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[var(--color-muted)] hover:text-[var(--color-primary)]"
+        >
+          $bLOkz · {SOLANA_TOKEN.shortMint}
+          <ExternalLink className="h-3 w-3" />
+        </a>
       </footer>
 
       <Toaster
