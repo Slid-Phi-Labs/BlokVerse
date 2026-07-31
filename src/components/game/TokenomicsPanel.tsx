@@ -20,6 +20,7 @@ import {
   ALLOCATIONS,
   EMISSION,
   FLOW_STEPS,
+  LIVE_TOKEN,
   TOKEN_SYMBOL,
   TOTAL_SUPPLY,
   emissionTimeline,
@@ -28,7 +29,7 @@ import {
 } from "@/lib/game/tokenomics";
 import { useGameStore } from "@/lib/game/store";
 import { formatNumber } from "@/lib/utils";
-import { Waves, ArrowDownUp, Calculator } from "lucide-react";
+import { Waves, ArrowDownUp, Calculator, ExternalLink } from "lucide-react";
 
 export function TokenomicsPanel() {
   const balance = useGameStore((s) => s.balance);
@@ -54,6 +55,47 @@ export function TokenomicsPanel() {
 
   return (
     <div className="space-y-4">
+      <Card className="border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            Live on Solana
+            <Badge variant="secondary">{LIVE_TOKEN.platform}</Badge>
+          </CardTitle>
+          <CardDescription>
+            Tradeable $bLOkz with bonding-curve liquidity. Game:{" "}
+            <a
+              className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
+              href={LIVE_TOKEN.website}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {LIVE_TOKEN.website}
+            </a>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3 text-sm">
+          <code className="rounded bg-[var(--color-elevated)] px-2 py-1 text-xs break-all">
+            {LIVE_TOKEN.mint}
+          </code>
+          <a
+            className="inline-flex items-center gap-1 font-medium text-[var(--color-primary)] hover:underline"
+            href={LIVE_TOKEN.pumpUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Trade on pump.fun <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <a
+            className="inline-flex items-center gap-1 text-[var(--color-muted)] hover:underline"
+            href={LIVE_TOKEN.solscanMint}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Solscan
+          </a>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="mb-2">
