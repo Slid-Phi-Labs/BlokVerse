@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
+import { WalletConnectModal } from "./WalletConnectModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,9 +18,13 @@ import {
   formatDuration,
   STAKE_LOCK_MS,
 } from "@/lib/game/rewards";
-import { shortAddress, SOLANA_TOKEN } from "@/lib/game/solana";
+import {
+  formatTokenAmount,
+  isEmbeddedFrame,
+  shortAddress,
+  SOLANA_TOKEN,
+} from "@/lib/game/solana";
 import { useGameStore } from "@/lib/game/store";
-import { formatNumber } from "@/lib/utils";
 import {
   ExternalLink,
   Gift,
@@ -41,22 +46,25 @@ export function StakePanel() {
   const totalRewardsClaimed = useGameStore((s) => s.totalRewardsClaimed);
   const walletStartedAt = useGameStore((s) => s.walletStartedAt);
   const walletAddress = useGameStore((s) => s.walletAddress);
+  const walletMethod = useGameStore((s) => s.walletMethod);
   const tokenBalance = useGameStore((s) => s.tokenBalance);
   const tokenLoading = useGameStore((s) => s.tokenLoading);
   const tokenError = useGameStore((s) => s.tokenError);
+  const lastTokenSyncAt = useGameStore((s) => s.lastTokenSyncAt);
   const stake = useGameStore((s) => s.stake);
   const unstake = useGameStore((s) => s.unstake);
   const claimRewards = useGameStore((s) => s.claimRewards);
-  const connectWallet = useGameStore((s) => s.connectWallet);
   const disconnectWallet = useGameStore((s) => s.disconnectWallet);
   const refreshTokenBalance = useGameStore((s) => s.refreshTokenBalance);
 
   const [amount, setAmount] = useState("100");
   const [now, setNow] = useState(0);
-  const [connecting, setConnecting] = useState(false);
+  const [walletModal, setWalletModal] = useState(false);
+  const [embedded, setEmbedded] = useState(false);
 
   useEffect(() => {
     setNow(Date.now());
+    setEmbedded(isEmbeddedFrame());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -64,7 +72,7 @@ export function StakePanel() {
   useEffect(() => {
     if (!walletAddress || !hasHydrated) return;
     void refreshTokenBalance();
-    const id = window.setInterval(() => void refreshTokenBalance(), 30_000);
+    const id = window.setInterval(() => void refreshTokenBalance(), 20_000);
     return () => window.clearInterval(id);
   }, [walletAddress, refreshTokenBalance, hasHydrated]);
 
@@ -94,39 +102,16 @@ export function StakePanel() {
     status.nextAt != null ? Math.max(0, status.nextAt - now) : 0;
   const dailyEst = estimateDailyYield(staked);
 
-  const onConnect = async () => {
-    setConnecting(true);
-    const res = await connectWallet();
-    setConnecting(false);
-    if (!res.ok) toast.error(res.error);
-    else toast.success("Wallet connected · $bLOkz mint synced");
-  };
-
-  const onStake = () => {
-    const res = stake(n);
-    if (!res.ok) toast.error(res.error);
-    else
-      toast.success(
-        `Staked ${formatNumber(n)} $bLOkz · 12h lock · mint ${SOLANA_TOKEN.shortMint}`,
-      );
-  };
-
-  const onUnstake = () => {
-    const res = unstake(n);
-    if (!res.ok) toast.error(res.error);
-    else toast.success(`Unstaked ${formatNumber(n)} $bLOkz`);
-  };
-
-  const onClaim = () => {
-    const res = claimRewards();
-    if (!res.ok) toast.error(res.error);
-    else if (res.amount != null) {
-      toast.success(
-        res.tier === "staker"
-          ? `Claimed ${formatNumber(res.amount)} accrued $bLOkz`
-          : `Monthly drip +${formatNumber(res.amount)} $bLOkz`,
-      );
+  const openFullPage = () => {
+    try {
+      if (window.top && window.top !== window.self) {
+        window.top.location.href = window.location.href;
+        return;
+      }
+    } catch {
+      /* ignore */
     }
+    window.open(window.location.href, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -137,17 +122,15 @@ export function StakePanel() {
           Stake $bLOkz
         </CardTitle>
         <CardDescription>
-          Staking is tied to the Solana mint{" "}
+          Token-2022 mint {SOLANA_TOKEN.shortMint}. Site:{" "}
           <a
-            href={SOLANA_TOKEN.solscanUrl}
+            className="text-[var(--color-primary)] underline-offset-2 hover:underline"
+            href={SOLANA_TOKEN.website}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
           >
-            {SOLANA_TOKEN.shortMint}
+            {SOLANA_TOKEN.website.replace("https://", "")}
           </a>
-          . Connect Phantom, hold free tokens, stake → 12h lock · daily accrual.
-          Non-stakers get a monthly drip.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -155,26 +138,33 @@ export function StakePanel() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Wallet className="h-4 w-4 text-[var(--color-primary)]" />
-              Solana wallet · $bLOkz
+              Solana · $bLOkz
             </div>
-            <Badge variant="success">Mint live</Badge>
+            <Badge variant="success">Token-2022</Badge>
           </div>
           <code className="block break-all text-[11px] text-[var(--color-muted)]">
             {SOLANA_TOKEN.mint}
           </code>
+          {embedded && !walletAddress ? (
+            <Button size="sm" onClick={openFullPage}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open full page
+            </Button>
+          ) : null}
           {!walletAddress ? (
-            <Button
-              className="w-full"
-              disabled={connecting}
-              onClick={() => void onConnect()}
-            >
+            <Button className="w-full" onClick={() => setWalletModal(true)}>
               <Wallet className="h-4 w-4" />
-              {connecting ? "Connecting…" : "Connect Phantom"}
+              Connect wallet
             </Button>
           ) : (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="muted">{shortAddress(walletAddress)}</Badge>
+                <Badge variant="muted" className="font-mono">
+                  {shortAddress(walletAddress, 6)}
+                </Badge>
+                <Badge variant={walletMethod === "manual" ? "warn" : "success"}>
+                  {walletMethod === "manual" ? "pasted" : "extension"}
+                </Badge>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -194,9 +184,22 @@ export function StakePanel() {
                   Disconnect
                 </Button>
               </div>
+              <p className="break-all font-mono text-[11px] text-[var(--color-subtle)]">
+                {walletAddress}
+              </p>
               {tokenError ? (
                 <p className="text-xs text-[var(--color-danger)]">{tokenError}</p>
-              ) : null}
+              ) : (
+                <p className="text-xs text-[var(--color-muted)]">
+                  On-chain:{" "}
+                  <span className="font-semibold text-[var(--color-primary)]">
+                    {formatTokenAmount(tokenBalance)} $bLOkz
+                  </span>
+                  {lastTokenSyncAt
+                    ? ` · ${Math.max(0, Math.round((now - lastTokenSyncAt) / 1000))}s ago`
+                    : null}
+                </p>
+              )}
             </div>
           )}
           <div className="flex flex-wrap gap-2">
@@ -208,16 +211,16 @@ export function StakePanel() {
               }
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              Buy $bLOkz
+              Buy
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() =>
-                window.open(SOLANA_TOKEN.solscanUrl, "_blank", "noopener")
+                window.open(SOLANA_TOKEN.website, "_blank", "noopener")
               }
             >
-              Solscan
+              Website
             </Button>
           </div>
         </div>
@@ -226,18 +229,20 @@ export function StakePanel() {
           <Metric
             label="On-chain free"
             value={
-              walletAddress ? `${formatNumber(freeOnChain)} $bLOkz` : "—"
+              walletAddress
+                ? `${formatTokenAmount(tokenBalance)} $bLOkz`
+                : "—"
             }
             accent
           />
           <Metric
             label="Staked"
-            value={`${formatNumber(staked)} $bLOkz`}
+            value={`${formatTokenAmount(staked)} $bLOkz`}
             accent
           />
           <Metric
             label="Forge credits"
-            value={`${formatNumber(balance)} $bLOkz`}
+            value={`${formatTokenAmount(balance)} $bLOkz`}
           />
         </div>
 
@@ -248,111 +253,77 @@ export function StakePanel() {
               Rewards
             </div>
             {staked > 0 ? (
-              <Badge variant="success">Staker · accruing</Badge>
+              <Badge variant="success">Staker</Badge>
             ) : (
-              <Badge variant="warn">Non-staker · monthly</Badge>
+              <Badge variant="warn">Non-staker</Badge>
             )}
           </div>
           <p className="text-sm text-[var(--color-muted)]">
             {staked > 0
-              ? `Pending ~${status.pendingPreview.toFixed(2)} · ~${formatNumber(dailyEst)}/day at 2% of stake. First claim after 12h lock.`
-              : `Monthly community drip: ${formatNumber(status.amount)} $bLOkz when unstaked (after wait).`}
+              ? `Pending ~${status.pendingPreview.toFixed(2)} · ~${dailyEst}/day`
+              : `Monthly drip: ${status.amount} $bLOkz`}
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Metric
-              label={status.ready ? "Claimable now" : "Next / status"}
-              value={
-                status.ready
-                  ? `${formatNumber(status.amount)} $bLOkz`
-                  : formatDuration(claimWaitMs)
-              }
-              accent={status.ready}
-            />
-            <Metric
-              label="Lifetime claimed"
-              value={`${formatNumber(totalRewardsClaimed)} $bLOkz`}
-            />
-          </div>
-          <Button className="w-full" onClick={onClaim} disabled={!status.ready}>
+          <Button className="w-full" onClick={() => {
+            const res = claimRewards();
+            if (!res.ok) toast.error(res.error);
+            else if (res.amount != null) toast.success(`+${res.amount} $bLOkz`);
+          }} disabled={!status.ready}>
             <Gift className="h-4 w-4" />
             {status.ready
-              ? `Claim ${formatNumber(status.amount)} $bLOkz`
-              : (status.reason ?? `Wait ${formatDuration(claimWaitMs)}`)}
+              ? `Claim ${status.amount}`
+              : formatDuration(claimWaitMs)}
           </Button>
         </div>
 
         <div className="space-y-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-4">
           <label className="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
-            Amount ($bLOkz mint)
+            Amount
           </label>
           <Input
             type="number"
             min={1}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="100"
           />
-          <div className="flex flex-wrap gap-2">
-            {[50, 100, 250, 500].map((q) => (
-              <Button
-                key={q}
-                size="sm"
-                variant="ghost"
-                onClick={() => setAmount(String(q))}
-              >
-                {q}
-              </Button>
-            ))}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setAmount(String(Math.max(0, freeOnChain)))}
-            >
-              Max free
-            </Button>
-          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               className="flex-1"
-              onClick={onStake}
-              disabled={!walletAddress}
+              disabled={!walletAddress || freeOnChain <= 0}
+              onClick={() => {
+                const res = stake(n);
+                if (!res.ok) toast.error(res.error);
+                else toast.success(`Staked ${n}`);
+              }}
             >
               <Lock className="h-4 w-4" />
-              Stake mint
+              Stake
             </Button>
             <Button
               className="flex-1"
               variant="secondary"
-              onClick={onUnstake}
               disabled={staked > 0 && !lock.ok}
+              onClick={() => {
+                const res = unstake(n);
+                if (!res.ok) toast.error(res.error);
+                else toast.success(`Unstaked ${n}`);
+              }}
             >
               <Unlock className="h-4 w-4" />
               Unstake
             </Button>
           </div>
-          {staked > 0 && (
+          {staked > 0 && !lock.ok ? (
             <p className="text-xs text-[var(--color-muted)]">
-              {lock.ok ? (
-                <>Minimum 12h lock complete — unstake available.</>
-              ) : (
-                <>
-                  12h lock · unlocks in{" "}
-                  <span className="font-semibold text-[var(--color-fg)]">
-                    {formatDuration(lock.waitMs)}
-                  </span>
-                  . Top-up restarts the{" "}
-                  {Math.round(STAKE_LOCK_MS / 3_600_000)}h timer.
-                </>
-              )}
+              12h lock · {formatDuration(lock.waitMs)} left (top-up restarts{" "}
+              {Math.round(STAKE_LOCK_MS / 3_600_000)}h)
             </p>
-          )}
-          {!walletAddress && (
-            <p className="text-xs text-[var(--color-muted)]">
-              Connect a wallet that holds {SOLANA_TOKEN.shortMint} to stake.
-            </p>
-          )}
+          ) : null}
         </div>
       </CardContent>
+      <WalletConnectModal
+        open={walletModal}
+        onClose={() => setWalletModal(false)}
+      />
     </Card>
   );
 }
@@ -373,7 +344,7 @@ function Metric({
       </div>
       <div
         className={`text-base font-semibold tabular ${
-          accent ? "text-[var(--color-primary)]" : "text-[var(--color-fg)]"
+          accent ? "text-[var(--color-primary)]" : ""
         }`}
       >
         {value}
