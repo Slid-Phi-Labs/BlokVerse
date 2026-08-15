@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
+import { phiRestPlugin } from "./lib/vite-phi-rest.mjs";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -214,6 +215,7 @@ export default defineConfig(({ command }) => ({
     global: "globalThis",
   },
   plugins: [
+    phiRestPlugin(),
     pgliteBootstrapPlugin(),
     farcasterManifestPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
