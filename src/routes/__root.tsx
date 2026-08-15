@@ -21,6 +21,11 @@ export const Route = createRootRoute({
       },
       { name: "theme-color", content: "#e8eae8" },
       { name: "color-scheme", content: "light" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "bLOK" },
+      { name: "application-name", content: "bLOK CHaiN" },
       // Farcaster / mini app discovery helpers
       { name: "fc:frame", content: "vNext" },
       {
@@ -36,6 +41,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "icon", href: "/logo-blok-mark.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/logo-blok-32.png", type: "image/png", sizes: "32x32" },
       { rel: "apple-touch-icon", href: "/logo-blok-192.png" },
@@ -57,6 +63,11 @@ function RootDocument() {
           </FarcasterProvider>
         </AuthProvider>
         <Scripts />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`,
+          }}
+        />
       </body>
     </html>
   );
