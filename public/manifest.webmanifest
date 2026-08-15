@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "bLOK CHaiN",
+  "short_name": "bLOK",
+  "description": "Forge crypto blocks into one chain. Timed ranks, stake $bLOkz.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#e8eae8",
+  "theme_color": "#e8eae8",
+  "lang": "en",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
