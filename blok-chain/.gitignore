@@ -1,0 +1,15 @@
+node_modules
+.vercel
+dist
+.DS_Store
+*.log
+.env
+.env.*
+screenshots
+artifacts
+solana-pump/mint-*.json
+solana-pump/LAST_LAUNCH.json
+solana-pump/node_modules/
+cache/
+out/
+
