@@ -1,0 +1,13 @@
+node_modules/
+.project_id
+.github_repo
+.env
+.env.*
+
+.vercel/
+.vercel-deploy-payload.json
+deploy-args.json
+full-deploy.json
+mcp-vercel-args.json
+screenshots/
+
