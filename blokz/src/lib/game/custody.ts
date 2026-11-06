@@ -61,7 +61,9 @@ export function parseLinkChallenge(message: string): LinkChallenge | null {
   ];
   const domainMatch = /^(\S+) v(\d+)$/.exec(domainLine.trim());
   if (!domainMatch) return null;
-  const [, domain, versionRaw] = domainMatch as [string, string, string];
+  const domain = domainMatch[1];
+  const versionRaw = domainMatch[2];
+  if (typeof domain !== "string" || typeof versionRaw !== "string") return null;
   if (domain !== CHALLENGE_DOMAIN) return null;
   const version = Number(versionRaw);
   const address = addressLine.replace(/^address:\s*/, "").trim();

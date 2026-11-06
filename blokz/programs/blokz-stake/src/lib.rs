@@ -1,7 +1,8 @@
 //! bLOkz on-chain staking vault (Solana, Anchor).
 //!
-//! Custody boundary: real token lock + funded-pool yield for the live
-//! Token-2022 mint `5tX5…Dwf9`.
+//! Custody boundary: real token lock + funded-pool yield for the
+//! classic-SPL mint chosen at deploy (Token-2022 via token_2022 CPI is a
+//! deploy-time switch).
 //!
 //! Reward model (mirrors `src/lib/game/rewards.ts` + `STAKING_VAULT.md`):
 //! - Lock: 12h (`LOCK_SECS_DEFAULT = 43200`) after stake / top-up.
@@ -12,7 +13,7 @@
 //! - Authority can pause and update rate/lock.
 
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
 declare_id!("Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy");
 
@@ -62,7 +63,7 @@ pub mod blokz_stake {
     pub fn fund_rewards(ctx: Context<FundRewards>, amount: u64) -> Result<()> {
         require!(amount > 0, StakeError::BadAmount);
         let decimals = ctx.accounts.mint.decimals;
-        token_interface::transfer_checked(
+        token::transfer_checked(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
@@ -100,7 +101,7 @@ pub mod blokz_stake {
         accrue(&mut ctx.accounts.stake_acc, cfg, now)?;
 
         let decimals = ctx.accounts.mint.decimals;
-        token_interface::transfer_checked(
+        token::transfer_checked(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
@@ -159,7 +160,7 @@ pub mod blokz_stake {
         );
 
         let seeds: &[&[u8]] = &[b"config", &[ctx.accounts.config.bump]];
-        token_interface::transfer_checked(
+        token::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
@@ -207,7 +208,7 @@ pub mod blokz_stake {
         require!(pay > 0, StakeError::NothingToClaim);
 
         let seeds: &[&[u8]] = &[b"config", &[ctx.accounts.config.bump]];
-        token_interface::transfer_checked(
+        token::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
@@ -317,17 +318,17 @@ impl StakeAccount {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Account<'info, Mint>,
     #[account(
         constraint = vault.mint == mint.key() @ StakeError::BadVault,
         constraint = vault.owner == config.key() @ StakeError::BadVault,
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Account<'info, TokenAccount>,
     #[account(
         constraint = reward_vault.mint == mint.key() @ StakeError::BadVault,
         constraint = reward_vault.owner == config.key() @ StakeError::BadVault,
     )]
-    pub reward_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reward_vault: Account<'info, TokenAccount>,
     #[account(
         init,
         payer = authority,
@@ -342,33 +343,33 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct FundRewards<'info> {
     pub funder: Signer<'info>,
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Account<'info, Mint>,
     #[account(
         mut,
         constraint = reward_vault.mint == config.mint @ StakeError::BadVault,
         constraint = reward_vault.key() == config.reward_vault @ StakeError::BadVault,
     )]
-    pub reward_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reward_vault: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub funder_ata: InterfaceAccount<'info, TokenAccount>,
+    pub funder_ata: Account<'info, TokenAccount>,
     #[account(mut)]
     pub config: Account<'info, Config>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct StakeAccounts<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Account<'info, Mint>,
     #[account(
         mut,
         constraint = vault.mint == config.mint @ StakeError::BadVault,
         constraint = vault.key() == config.vault @ StakeError::BadVault,
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub user_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_ata: Account<'info, TokenAccount>,
     #[account(
         init_if_needed,
         payer = user,
@@ -382,7 +383,7 @@ pub struct StakeAccounts<'info> {
         bump = config.bump,
     )]
     pub config: Account<'info, Config>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
@@ -390,15 +391,15 @@ pub struct StakeAccounts<'info> {
 pub struct ClaimAccounts<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Account<'info, Mint>,
     #[account(
         mut,
         constraint = reward_vault.mint == config.mint @ StakeError::BadVault,
         constraint = reward_vault.key() == config.reward_vault @ StakeError::BadVault,
     )]
-    pub reward_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reward_vault: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub user_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_ata: Account<'info, TokenAccount>,
     #[account(
         mut,
         seeds = [b"stake", user.key().as_ref()],
@@ -410,7 +411,7 @@ pub struct ClaimAccounts<'info> {
         bump = config.bump,
     )]
     pub config: Account<'info, Config>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -483,3 +484,4 @@ pub enum StakeError {
     #[msg("Bad clock")]
     BadClock,
 }
+
