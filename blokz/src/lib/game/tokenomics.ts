@@ -8,7 +8,8 @@
  * Live Solana mint (pump.fun): see onchain.ts — game site https://github.com/ceedot-rock/blokz
  */
 
-import { BLOKZ_ONCHAIN, GAME_URL } from "./onchain";
+import { BLOKZ_ONCHAIN, GAME_URL } from "./onchain.ts";
+import { MIN_STAKE_CLAIM } from "./rewards.ts";
 
 export const TOKEN_SYMBOL = "$bLOkz";
 export const TOKEN_NAME = "bLOkz";
@@ -111,7 +112,8 @@ export function allocationTotalPct(): number {
 export const EMISSION = {
   /** Daily staker yield as fraction of personal stake. */
   dailyStakeRate: 0.02,
-  dailyStakeMin: 15,
+  /** Single-sourced from rewards.MIN_STAKE_CLAIM (claim reality == projection). */
+  dailyStakeMin: MIN_STAKE_CLAIM,
   /** Flat monthly for non-stakers. */
   monthlyNonStaker: 75,
   /** Hint sink. */

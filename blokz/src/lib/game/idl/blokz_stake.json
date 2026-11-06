@@ -1,0 +1,150 @@
+{
+  "version": "0.1.0",
+  "name": "blokz_stake",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "vault", "isMut": false, "isSigner": false },
+        { "name": "rewardVault", "isMut": false, "isSigner": false },
+        { "name": "config", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "lockSecs", "type": "u64" },
+        { "name": "dailyRateBps", "type": "u16" }
+      ]
+    },
+    {
+      "name": "fundRewards",
+      "accounts": [
+        { "name": "funder", "isMut": false, "isSigner": true },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "rewardVault", "isMut": true, "isSigner": false },
+        { "name": "funderAta", "isMut": true, "isSigner": false },
+        { "name": "config", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "stake",
+      "accounts": [
+        { "name": "user", "isMut": true, "isSigner": true },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "userAta", "isMut": true, "isSigner": false },
+        { "name": "stakeAcc", "isMut": true, "isSigner": false },
+        { "name": "config", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "unstake",
+      "accounts": [
+        { "name": "user", "isMut": true, "isSigner": true },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "userAta", "isMut": true, "isSigner": false },
+        { "name": "stakeAcc", "isMut": true, "isSigner": false },
+        { "name": "config", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "claim",
+      "accounts": [
+        { "name": "user", "isMut": true, "isSigner": true },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "rewardVault", "isMut": true, "isSigner": false },
+        { "name": "userAta", "isMut": true, "isSigner": false },
+        { "name": "stakeAcc", "isMut": true, "isSigner": false },
+        { "name": "config", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "setParams",
+      "accounts": [
+        { "name": "authority", "isMut": false, "isSigner": true },
+        { "name": "config", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "lockSecs", "type": "u64" },
+        { "name": "dailyRateBps", "type": "u16" }
+      ]
+    },
+    {
+      "name": "setPaused",
+      "accounts": [
+        { "name": "authority", "isMut": false, "isSigner": true },
+        { "name": "config", "isMut": true, "isSigner": false }
+      ],
+      "args": [{ "name": "paused", "type": "bool" }]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "publicKey" },
+          { "name": "mint", "type": "publicKey" },
+          { "name": "vault", "type": "publicKey" },
+          { "name": "rewardVault", "type": "publicKey" },
+          { "name": "lockSecs", "type": "u64" },
+          { "name": "dailyRateBps", "type": "u16" },
+          { "name": "paused", "type": "bool" },
+          { "name": "bump", "type": "u8" },
+          { "name": "totalStaked", "type": "u64" },
+          { "name": "rewardPool", "type": "u64" }
+        ]
+      }
+    },
+    {
+      "name": "StakeAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "amount", "type": "u64" },
+          { "name": "stakedAt", "type": "i64" },
+          { "name": "lastAccrualAt", "type": "i64" },
+          { "name": "pending", "type": "u64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "events": [
+    { "name": "VaultInit", "fields": [] },
+    { "name": "PoolFunded", "fields": [] },
+    { "name": "Staked", "fields": [] },
+    { "name": "Unstaked", "fields": [] },
+    { "name": "Claimed", "fields": [] },
+    { "name": "Paused", "fields": [] }
+  ],
+  "errors": [
+    { "code": 6000, "name": "Paused", "msg": "Staking is paused" },
+    { "code": 6001, "name": "Locked", "msg": "Stake is still locked" },
+    { "code": 6002, "name": "BadAmount", "msg": "Amount must be positive" },
+    { "code": 6003, "name": "BadParams", "msg": "Invalid lock/rate params" },
+    { "code": 6004, "name": "NothingToClaim", "msg": "Reward pool is empty" },
+    { "code": 6005, "name": "InsufficientStake", "msg": "Not enough staked" },
+    { "code": 6006, "name": "BadVault", "msg": "Vault account mismatch" },
+    { "code": 6007, "name": "Unauthorized", "msg": "Not the vault authority" },
+    { "code": 6008, "name": "Overflow", "msg": "Math overflow" },
+    { "code": 6009, "name": "BadClock", "msg": "Bad clock" }
+  ],
+  "metadata": {
+    "address": "BLokZStake11111111111111111111111111111111"
+  }
+}

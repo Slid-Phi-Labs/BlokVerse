@@ -17,9 +17,17 @@ import {
   connectSolanaWallet,
   disconnectSolanaWallet,
   fetchBlokzBalance,
+  getSolanaProvider,
   isValidSolanaAddress,
+  signChallengeWithProvider,
   SOLANA_TOKEN,
 } from "./solana";
+import {
+  buildLinkChallenge,
+  requireVerifiedWallet,
+  sanitizePersistedLedger,
+  verifyLinkChallenge,
+} from "./custody";
 import type { FarcasterAuthMode } from "@/lib/farcaster/types";
 import { createSpSessionStorage } from "@/lib/codec/spStorage";
 import {
@@ -72,6 +80,9 @@ interface GameStore {
 
   walletAddress: string | null;
   walletMethod: "extension" | "manual" | null;
+  walletVerified: boolean;
+  walletVerifiedAt: number | null;
+  lastChallenge: string | null;
   tokenBalance: number;
   tokenDecimals: number;
   tokenLoading: boolean;
@@ -84,6 +95,11 @@ interface GameStore {
     address: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   disconnectWallet: () => Promise<void>;
+  /**
+   * Prove key custody for a read-only (pasted) link via signMessage.
+   * Required before stake / unstake / claim on non-extension links.
+   */
+  verifyWalletOwnership: () => Promise<{ ok: boolean; error?: string }>;
   refreshTokenBalance: () => Promise<void>;
 
   stake: (amount: number) => { ok: boolean; error?: string };
@@ -302,6 +318,9 @@ export const useGameStore = create<GameStore>()(
 
       walletAddress: null,
       walletMethod: null,
+      walletVerified: false,
+      walletVerifiedAt: null,
+      lastChallenge: null,
       tokenBalance: 0,
       tokenDecimals: SOLANA_TOKEN.decimals,
       tokenLoading: false,
@@ -312,10 +331,23 @@ export const useGameStore = create<GameStore>()(
       connectWallet: async () => {
         try {
           set({ tokenLoading: true, tokenError: null });
-          const { address, method } = await connectSolanaWallet();
+          const { address, method, provider } = await connectSolanaWallet();
+          // Extension connect is an in-wallet approval (custody proof), so the
+          // link is verified. Upgrade with a signed challenge when supported.
+          let challenge: string | null = null;
+          try {
+            const c = buildLinkChallenge(address, uid("ch"), Date.now());
+            await signChallengeWithProvider(provider, c);
+            if (verifyLinkChallenge(c, address).ok) challenge = c;
+          } catch {
+            // Challenge unsupported — the connect approval still stands.
+          }
           set({
             walletAddress: address,
             walletMethod: method,
+            walletVerified: true,
+            walletVerifiedAt: Date.now(),
+            lastChallenge: challenge,
             tokenLoading: false,
           });
           await get().refreshTokenBalance();
@@ -327,10 +359,90 @@ export const useGameStore = create<GameStore>()(
         }
       },
 
+      verifyWalletOwnership: async () => {
+        const addr = get().walletAddress;
+        if (!addr) {
+          return { ok: false, error: "Link a wallet address first" };
+        }
+        try {
+          const provider = getSolanaProvider();
+          if (!provider || typeof provider.signMessage !== "function") {
+            return {
+              ok: false,
+              error: "No signing wallet found — open the full page",
+            };
+          }
+          const providerAddr = provider.publicKey?.toString?.() ?? null;
+          if (providerAddr && providerAddr !== addr) {
+            return {
+              ok: false,
+              error: "Signature must come from the linked address",
+            };
+          }
+          const challenge = buildLinkChallenge(addr, uid("ch"), Date.now());
+          await signChallengeWithProvider(provider, challenge);
+          const check = verifyLinkChallenge(challenge, addr);
+          if (!check.ok) return { ok: false, error: check.error };
+          set({
+            walletVerified: true,
+            walletVerifiedAt: Date.now(),
+            lastChallenge: challenge,
+          });
+          return { ok: true };
+        } catch (e) {
+          const msg =
+            e instanceof Error ? e.message : "Wallet signature failed";
+          return { ok: false, error: msg };
+        }
+      },
+
       linkWalletAddress: async (address) => {
         const a = address.trim();
         if (!isValidSolanaAddress(a)) {
           return { ok: false, error: "Invalid Solana address" };
+        }
+        // Custody challenge first: when a sign-capable provider is present the
+        // link must be proven by signature *before* it is recorded. Without
+        // one (embedded frames) the link stays read-only until
+        // verifyWalletOwnership() succeeds.
+        const signer = getSolanaProvider();
+        if (signer && typeof signer.signMessage === "function") {
+          try {
+            const providerAddr = signer.publicKey?.toString?.() ?? null;
+            if (providerAddr && providerAddr !== a) {
+              return {
+                ok: false,
+                error: "Signature must come from the linked address",
+              };
+            }
+            const challenge = buildLinkChallenge(a, uid("ch"), Date.now());
+            await signChallengeWithProvider(signer, challenge);
+            const check = verifyLinkChallenge(challenge, a);
+            if (!check.ok) return { ok: false, error: check.error };
+            try {
+              set({
+                tokenLoading: true,
+                tokenError: null,
+                walletAddress: a,
+                walletMethod: "manual",
+                walletVerified: true,
+                walletVerifiedAt: Date.now(),
+                lastChallenge: challenge,
+              });
+              await get().refreshTokenBalance();
+              set({ tokenLoading: false });
+              return { ok: true };
+            } catch (e) {
+              const msg =
+                e instanceof Error ? e.message : "Balance fetch failed";
+              set({ tokenLoading: false, tokenError: msg });
+              return { ok: false, error: msg };
+            }
+          } catch (e) {
+            const msg =
+              e instanceof Error ? e.message : "Wallet signature failed";
+            return { ok: false, error: msg };
+          }
         }
         try {
           set({
@@ -338,6 +450,9 @@ export const useGameStore = create<GameStore>()(
             tokenError: null,
             walletAddress: a,
             walletMethod: "manual",
+            walletVerified: false,
+            walletVerifiedAt: null,
+            lastChallenge: null,
           });
           await get().refreshTokenBalance();
           set({ tokenLoading: false });
@@ -360,6 +475,9 @@ export const useGameStore = create<GameStore>()(
         set({
           walletAddress: null,
           walletMethod: null,
+          walletVerified: false,
+          walletVerifiedAt: null,
+          lastChallenge: null,
           tokenBalance: 0,
           tokenError: null,
           lastTokenSyncAt: null,
@@ -390,8 +508,9 @@ export const useGameStore = create<GameStore>()(
           return { ok: false, error: "Enter a positive amount" };
         }
         const state = get();
-        if (!state.walletAddress) {
-          return { ok: false, error: "Connect a wallet that holds $bLOkz" };
+        const custody = requireVerifiedWallet(state);
+        if (!custody.ok) {
+          return { ok: false, error: custody.error };
         }
         const free = Math.floor(state.tokenBalance);
         if (a > free) {
@@ -419,6 +538,10 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         if (a > state.staked) {
           return { ok: false, error: "Not enough staked $bLOkz" };
+        }
+        const custody = requireVerifiedWallet(state);
+        if (!custody.ok) {
+          return { ok: false, error: custody.error };
         }
         const lock = canUnstake(state.staked, state.stakedAt);
         if (!lock.ok) {
@@ -452,6 +575,10 @@ export const useGameStore = create<GameStore>()(
       },
 
       claimRewards: () => {
+        const gate = requireVerifiedWallet(get());
+        if (!gate.ok) {
+          return { ok: false, error: gate.error };
+        }
         syncAccrual(get, set);
         const s = get();
         const status = claimStatus(
@@ -695,6 +822,9 @@ export const useGameStore = create<GameStore>()(
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<GameStore>;
+        // Validate + clamp every rehydrated ledger field so a corrupt or
+        // tampered entry can never mint balances or resurrect stakes.
+        const clean = sanitizePersistedLedger(p);
         const validTabs: AppTab[] = [
           "play",
           "leaderboard",
@@ -708,7 +838,12 @@ export const useGameStore = create<GameStore>()(
         return {
           ...current,
           ...p,
+          ...clean,
           tab,
+          // Ownership proof never survives reload — re-verify each session.
+          walletVerified: false,
+          walletVerifiedAt: null,
+          lastChallenge: null,
           hasHydrated: current.hasHydrated,
           tokenLoading: false,
           tokenError: null,
