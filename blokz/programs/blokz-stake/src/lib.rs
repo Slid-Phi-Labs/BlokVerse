@@ -14,7 +14,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-declare_id!("BLokZStake11111111111111111111111111111111");
+declare_id!("Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy");
 
 pub const LOCK_SECS_DEFAULT: u64 = 43_200; // 12h
 pub const DAILY_RATE_BPS_DEFAULT: u16 = 200; // 2.00%/day

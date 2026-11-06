@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-blokz_stake = "BLokZStake11111111111111111111111111111111"
+blokz_stake = "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy"
 
 [programs.devnet]
-blokz_stake = "BLokZStake11111111111111111111111111111111"
+blokz_stake = "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy"
 
 [programs.mainnet]
-blokz_stake = "BLokZStake11111111111111111111111111111111"
+blokz_stake = "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy"
 
 [registry]
 url = "https://api.apr.dev"
