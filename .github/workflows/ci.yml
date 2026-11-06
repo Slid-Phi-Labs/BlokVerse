@@ -72,3 +72,42 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
           test -f ~/.config/solana/id.json || solana-keygen new --no-bip39-passphrase --silent -o ~/.config/solana/id.json
           anchor test
+
+  idl-drift:
+    name: idl-drift (regenerated IDL matches checked-in)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blokz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Solana CLI (Agave)
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+      - name: Install AVM + Anchor 0.31.1
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --force
+          "$HOME/.cargo/bin/avm" install 0.31.1
+          "$HOME/.cargo/bin/avm" use 0.31.1
+          anchor --version
+      - name: Regenerate IDL and diff against checked-in copy
+        # Fails on drift: any lib.rs instruction/account/arg change must ship
+        # with a regenerated src/lib/game/idl/blokz_stake.json (see
+        # docs/DEVNET-DEPLOY.md step 2). metadata.address is deploy-specific
+        # (placeholder until keys sync), so it is excluded from the diff.
+        # No `anchor keys sync` here: it would rewrite declare_id!/Anchor.toml
+        # with an ephemeral id and false-fail the comparison.
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
+          mkdir -p target/idl
+          anchor idl build
+          ls -la target/idl/
+          FRESH="$(ls target/idl/*.json | head -n 1)"
+          echo "fresh IDL: $FRESH"
+          jq -S 'del(.metadata)' "$FRESH" > /tmp/idl.fresh.json
+          jq -S 'del(.metadata)' src/lib/game/idl/blokz_stake.json > /tmp/idl.checked.json
+          diff -u /tmp/idl.checked.json /tmp/idl.fresh.json
