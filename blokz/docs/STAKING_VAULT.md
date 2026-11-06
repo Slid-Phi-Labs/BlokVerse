@@ -45,7 +45,7 @@ anchor build && anchor deploy
 2. Call `initialize(lock_secs=43200, daily_rate_bps=200)`.
 3. `fund_rewards` with staking allocation.
 4. Set `VITE_STAKE_PROGRAM_ID=<program id>` in the app env.
-5. Copy IDL to `src/lib/game/idl/blokz_stake.json` and finish client wiring in `vault.ts`.
+5. Copy IDL to `src/lib/game/idl/blokz_stake.json` — client wiring in `vault.ts` (discriminator + borsh encoding, message compile, wallet `signTransaction` transport) is already in place; pass the config/stake PDAs + ATAs via `accounts`.
 
 ### User flow
 

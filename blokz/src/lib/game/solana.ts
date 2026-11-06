@@ -59,6 +59,12 @@ export type SolanaProvider = {
   disconnect?: () => Promise<void>;
   /** Message signing for the custody challenge (not all wallets expose it). */
   signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  /**
+   * Raw transaction-message signing for the vault path (`vault.ts`).
+   * Absent on read-only / embedded wallets — vault submits refuse closed
+   * instead of treating them as signers.
+   */
+  signTransaction?: (message: Uint8Array) => Promise<Uint8Array>;
 };
 
 export function isEmbeddedFrame(): boolean {
