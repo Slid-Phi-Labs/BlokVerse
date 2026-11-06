@@ -59,6 +59,9 @@ jobs:
       - name: anchor build
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
+          anchor --version
+          which cargo-build-sbf || echo NO-BUILD-SBF
+          ls "$HOME/.local/share/solana/install/active_release/bin/" || true
           anchor build
           ls -la target/deploy/
           test -f target/deploy/blokz_stake.so
