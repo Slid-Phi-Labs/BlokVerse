@@ -57,6 +57,8 @@ export type SolanaProvider = {
     onlyIfTrusted?: boolean;
   }) => Promise<{ publicKey: { toString(): string } }>;
   disconnect?: () => Promise<void>;
+  /** Message signing for the custody challenge (not all wallets expose it). */
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
 };
 
 export function isEmbeddedFrame(): boolean {
@@ -105,4 +107,117 @@ export function waitForSolanaProvider(
       }
     }, 100);
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Wallet I/O vendored from blokgame (adapted to the multi-RPC list).  */
+/* ------------------------------------------------------------------ */
+
+async function rpcAt<T>(
+  rpcUrl: string,
+  method: string,
+  params: unknown[],
+): Promise<T> {
+  const res = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+  const json = (await res.json()) as {
+    result?: T;
+    error?: { message: string };
+  };
+  if (json.error) throw new Error(json.error.message);
+  return json.result as T;
+}
+
+/** On-chain $bLOkz balance — tries each RPC URL in order, throws the last error. */
+export async function fetchBlokzBalance(owner: string): Promise<{
+  uiAmount: number;
+  raw: bigint;
+  decimals: number;
+}> {
+  type Acc = {
+    account: {
+      data: {
+        parsed: {
+          info: {
+            tokenAmount: {
+              amount: string;
+              decimals: number;
+              uiAmount: number | null;
+            };
+          };
+        };
+      };
+    };
+  };
+
+  let lastError: unknown = new Error("No Solana RPC configured");
+  for (const rpcUrl of SOLANA_TOKEN.rpcUrls) {
+    try {
+      const result = await rpcAt<{ value: Acc[] }>(
+        rpcUrl,
+        "getTokenAccountsByOwner",
+        [owner, { mint: SOLANA_TOKEN.mint }, { encoding: "jsonParsed" }],
+      );
+      let raw = 0n;
+      let decimals: number = SOLANA_TOKEN.decimals;
+      for (const row of result?.value ?? []) {
+        const ta = row.account.data.parsed.info.tokenAmount;
+        decimals = ta.decimals;
+        raw += BigInt(ta.amount);
+      }
+      const uiAmount = Number(raw) / 10 ** decimals;
+      return { uiAmount, raw, decimals };
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+
+/** Connect via the injected provider (Phantom / Solflare / Backpack). */
+export async function connectSolanaWallet(): Promise<{
+  address: string;
+  method: "extension";
+  provider: SolanaProvider;
+}> {
+  const provider = await waitForSolanaProvider();
+  if (!provider) {
+    throw new Error(
+      "No Solana wallet found — install Phantom or paste an address",
+    );
+  }
+  const { publicKey } = await provider.connect();
+  return { address: publicKey.toString(), method: "extension", provider };
+}
+
+export async function disconnectSolanaWallet(): Promise<void> {
+  const provider = getSolanaProvider();
+  if (provider?.disconnect) await provider.disconnect();
+}
+
+/**
+ * Ask the wallet to sign the custody challenge. Resolves with the raw
+ * signature bytes; throws when the provider cannot sign (embedded frames,
+ * read-only wallets) so callers can fall back to read-only mode.
+ */
+export async function signChallengeWithProvider(
+  provider: SolanaProvider,
+  challenge: string,
+): Promise<Uint8Array> {
+  if (typeof provider.signMessage !== "function") {
+    throw new Error("Wallet cannot sign messages — open the full page");
+  }
+  const bytes =
+    typeof TextEncoder !== "undefined"
+      ? new TextEncoder().encode(challenge)
+      : Uint8Array.from(challenge.split("").map((c) => c.charCodeAt(0) & 0xff));
+  const { signature } = await provider.signMessage(bytes);
+  if (!signature || signature.length < 64) {
+    throw new Error("Wallet returned an invalid signature");
+  }
+  return signature;
 }

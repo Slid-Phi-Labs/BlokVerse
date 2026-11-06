@@ -26,6 +26,13 @@ import {
 } from "@/lib/game/solana";
 import { useGameStore } from "@/lib/game/store";
 import {
+  isVaultLive,
+  requestVaultClaim,
+  requestVaultStake,
+  requestVaultUnstake,
+  STAKE_PROGRAM_ID,
+} from "@/lib/game/vault";
+import {
   ExternalLink,
   Gift,
   Lock,
@@ -55,6 +62,8 @@ export function StakePanel() {
   const unstake = useGameStore((s) => s.unstake);
   const claimRewards = useGameStore((s) => s.claimRewards);
   const disconnectWallet = useGameStore((s) => s.disconnectWallet);
+  const walletVerified = useGameStore((s) => s.walletVerified);
+  const verifyWalletOwnership = useGameStore((s) => s.verifyWalletOwnership);
   const refreshTokenBalance = useGameStore((s) => s.refreshTokenBalance);
 
   const [amount, setAmount] = useState("100");
@@ -101,6 +110,7 @@ export function StakePanel() {
   const claimWaitMs =
     status.nextAt != null ? Math.max(0, status.nextAt - now) : 0;
   const dailyEst = estimateDailyYield(staked);
+  const vaultLive = isVaultLive();
 
   const openFullPage = () => {
     try {
@@ -141,6 +151,9 @@ export function StakePanel() {
               Solana · $bLOkz
             </div>
             <Badge variant="success">Token-2022</Badge>
+            <Badge variant={vaultLive ? "success" : "muted"}>
+              {vaultLive ? "On-chain vault" : "Simulated ledger"}
+            </Badge>
           </div>
           <code className="block break-all text-[11px] text-[var(--color-muted)]">
             {SOLANA_TOKEN.mint}
@@ -165,6 +178,9 @@ export function StakePanel() {
                 <Badge variant={walletMethod === "manual" ? "warn" : "success"}>
                   {walletMethod === "manual" ? "pasted" : "extension"}
                 </Badge>
+                <Badge variant={walletVerified ? "success" : "warn"}>
+                  {walletVerified ? "verified" : "read-only"}
+                </Badge>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -187,6 +203,25 @@ export function StakePanel() {
               <p className="break-all font-mono text-[11px] text-[var(--color-subtle)]">
                 {walletAddress}
               </p>
+              {!walletVerified ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--color-warn)] bg-[var(--color-elevated)] p-3">
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Read-only link — sign the ownership challenge to stake or
+                    claim.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      const res = await verifyWalletOwnership();
+                      if (!res.ok) toast.error(res.error);
+                      else toast.success("Ownership verified");
+                    }}
+                  >
+                    Verify ownership
+                  </Button>
+                </div>
+              ) : null}
               {tokenError ? (
                 <p className="text-xs text-[var(--color-danger)]">{tokenError}</p>
               ) : (
@@ -224,6 +259,22 @@ export function StakePanel() {
             </Button>
           </div>
         </div>
+
+        {vaultLive ? (
+          <div className="space-y-1 rounded-[var(--radius-lg)] border border-[var(--color-chain)] bg-[var(--color-elevated)] p-4 text-xs text-[var(--color-muted)]">
+            <p className="text-sm font-semibold text-[var(--color-primary)]">
+              On-chain vault live
+            </p>
+            <p className="break-all font-mono text-[11px]">
+              Program {STAKE_PROGRAM_ID}
+            </p>
+            <p>
+              Stake, unstake, and claim settle against the vault program. The
+              simulated ledger below stays as a preview until tx signing
+              lands.
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Metric
@@ -263,7 +314,12 @@ export function StakePanel() {
               ? `Pending ~${status.pendingPreview.toFixed(2)} · ~${dailyEst}/day`
               : `Monthly drip: ${status.amount} $bLOkz`}
           </p>
-          <Button className="w-full" onClick={() => {
+          <Button className="w-full" onClick={async () => {
+            if (vaultLive) {
+              const res = await requestVaultClaim();
+              if (!res.ok) toast.error(res.error);
+              return;
+            }
             const res = claimRewards();
             if (!res.ok) toast.error(res.error);
             else if (res.amount != null) toast.success(`+${res.amount} $bLOkz`);
@@ -289,7 +345,12 @@ export function StakePanel() {
             <Button
               className="flex-1"
               disabled={!walletAddress || freeOnChain <= 0}
-              onClick={() => {
+              onClick={async () => {
+                if (vaultLive) {
+                  const vres = await requestVaultStake(n);
+                  if (!vres.ok) toast.error(vres.error);
+                  return;
+                }
                 const res = stake(n);
                 if (!res.ok) toast.error(res.error);
                 else toast.success(`Staked ${n}`);
@@ -302,7 +363,12 @@ export function StakePanel() {
               className="flex-1"
               variant="secondary"
               disabled={staked > 0 && !lock.ok}
-              onClick={() => {
+              onClick={async () => {
+                if (vaultLive) {
+                  const vres = await requestVaultUnstake(n);
+                  if (!vres.ok) toast.error(vres.error);
+                  return;
+                }
                 const res = unstake(n);
                 if (!res.ok) toast.error(res.error);
                 else toast.success(`Unstaked ${n}`);
