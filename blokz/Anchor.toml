@@ -18,7 +18,7 @@ blokz_stake = "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "mainnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
