@@ -60,6 +60,8 @@ jobs:
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
           anchor build
+          ls -la target/deploy/
+          test -f target/deploy/blokz_stake.so
       - name: anchor test
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
