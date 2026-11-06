@@ -103,8 +103,8 @@ jobs:
         # with an ephemeral id and false-fail the comparison.
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
-          mkdir -p target/idl
-          anchor idl build
+          anchor build
+          echo "--- idl after anchor build ---"
           ls -la target/idl/
           FRESH="$(ls target/idl/*.json | head -n 1)"
           echo "fresh IDL: $FRESH"
