@@ -19,3 +19,8 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = { version = "0.31.1", features = ["token"] }
+
+# SBF platform tools ship an older cargo that cannot parse edition-2024
+# manifests (e.g. cpufeatures 0.3.x). Pin the 0.2 line.
+[patch.crates-io]
+cpufeatures = "=0.2.17"
