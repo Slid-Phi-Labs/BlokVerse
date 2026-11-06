@@ -41,11 +41,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install Solana CLI (Agave)
         run: sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-      - name: Install AVM + Anchor 0.30.1
+      - name: Install AVM + Anchor 0.31.1
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --force
-          "$HOME/.cargo/bin/avm" install 0.30.1
-          "$HOME/.cargo/bin/avm" use 0.30.1
+          "$HOME/.cargo/bin/avm" install 0.31.1
+          "$HOME/.cargo/bin/avm" use 0.31.1
           anchor --version
       - name: Sync program keypair ids
         # The checked-in placeholder id is pre-deploy. Generate an ephemeral
