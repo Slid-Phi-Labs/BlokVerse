@@ -20,6 +20,7 @@ import {
 } from "@/lib/game/rewards";
 import {
   formatTokenAmount,
+  getSolanaProvider,
   isEmbeddedFrame,
   shortAddress,
   SOLANA_TOKEN,
@@ -269,9 +270,9 @@ export function StakePanel() {
               Program {STAKE_PROGRAM_ID}
             </p>
             <p>
-              Stake, unstake, and claim settle against the vault program. The
-              simulated ledger below stays as a preview until tx signing
-              lands.
+              Stake, unstake, and claim build real vault transactions and ask
+              the connected wallet to sign. Without a signing transport the
+              actions refuse with an error instead of failing silently.
             </p>
           </div>
         ) : null}
@@ -316,7 +317,9 @@ export function StakePanel() {
           </p>
           <Button className="w-full" onClick={async () => {
             if (vaultLive) {
-              const res = await requestVaultClaim();
+              const res = await requestVaultClaim({
+                signer: getSolanaProvider(),
+              });
               if (!res.ok) toast.error(res.error);
               return;
             }
@@ -347,7 +350,9 @@ export function StakePanel() {
               disabled={!walletAddress || freeOnChain <= 0}
               onClick={async () => {
                 if (vaultLive) {
-                  const vres = await requestVaultStake(n);
+                  const vres = await requestVaultStake(n, {
+                    signer: getSolanaProvider(),
+                  });
                   if (!vres.ok) toast.error(vres.error);
                   return;
                 }
@@ -365,7 +370,9 @@ export function StakePanel() {
               disabled={staked > 0 && !lock.ok}
               onClick={async () => {
                 if (vaultLive) {
-                  const vres = await requestVaultUnstake(n);
+                  const vres = await requestVaultUnstake(n, {
+                    signer: getSolanaProvider(),
+                  });
                   if (!vres.ok) toast.error(vres.error);
                   return;
                 }
