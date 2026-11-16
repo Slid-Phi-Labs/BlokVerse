@@ -29,3 +29,6 @@ jobs:
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # defaults.run.working-directory does not apply to uses: steps;
+          # the action needs its own input or it looks in the repo root.
+          working-directory: blokz/programs/blokz-stake
