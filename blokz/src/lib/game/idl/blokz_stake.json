@@ -1,150 +1,793 @@
 {
-  "version": "0.1.0",
-  "name": "blokz_stake",
-  "instructions": [
+  "accounts": [
     {
-      "name": "initialize",
-      "accounts": [
-        { "name": "authority", "isMut": true, "isSigner": true },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "vault", "isMut": false, "isSigner": false },
-        { "name": "rewardVault", "isMut": false, "isSigner": false },
-        { "name": "config", "isMut": true, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
       ],
-      "args": [
-        { "name": "lockSecs", "type": "u64" },
-        { "name": "dailyRateBps", "type": "u16" }
-      ]
+      "name": "Config"
     },
     {
-      "name": "fundRewards",
-      "accounts": [
-        { "name": "funder", "isMut": false, "isSigner": true },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "rewardVault", "isMut": true, "isSigner": false },
-        { "name": "funderAta", "isMut": true, "isSigner": false },
-        { "name": "config", "isMut": true, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      "discriminator": [
+        80,
+        158,
+        67,
+        124,
+        50,
+        189,
+        192,
+        255
       ],
-      "args": [{ "name": "amount", "type": "u64" }]
-    },
-    {
-      "name": "stake",
-      "accounts": [
-        { "name": "user", "isMut": true, "isSigner": true },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "vault", "isMut": true, "isSigner": false },
-        { "name": "userAta", "isMut": true, "isSigner": false },
-        { "name": "stakeAcc", "isMut": true, "isSigner": false },
-        { "name": "config", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": [{ "name": "amount", "type": "u64" }]
-    },
-    {
-      "name": "unstake",
-      "accounts": [
-        { "name": "user", "isMut": true, "isSigner": true },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "vault", "isMut": true, "isSigner": false },
-        { "name": "userAta", "isMut": true, "isSigner": false },
-        { "name": "stakeAcc", "isMut": true, "isSigner": false },
-        { "name": "config", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false },
-        { "name": "systemProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": [{ "name": "amount", "type": "u64" }]
-    },
-    {
-      "name": "claim",
-      "accounts": [
-        { "name": "user", "isMut": true, "isSigner": true },
-        { "name": "mint", "isMut": false, "isSigner": false },
-        { "name": "rewardVault", "isMut": true, "isSigner": false },
-        { "name": "userAta", "isMut": true, "isSigner": false },
-        { "name": "stakeAcc", "isMut": true, "isSigner": false },
-        { "name": "config", "isMut": false, "isSigner": false },
-        { "name": "tokenProgram", "isMut": false, "isSigner": false }
-      ],
-      "args": []
-    },
-    {
-      "name": "setParams",
-      "accounts": [
-        { "name": "authority", "isMut": false, "isSigner": true },
-        { "name": "config", "isMut": true, "isSigner": false }
-      ],
-      "args": [
-        { "name": "lockSecs", "type": "u64" },
-        { "name": "dailyRateBps", "type": "u16" }
-      ]
-    },
-    {
-      "name": "setPaused",
-      "accounts": [
-        { "name": "authority", "isMut": false, "isSigner": true },
-        { "name": "config", "isMut": true, "isSigner": false }
-      ],
-      "args": [{ "name": "paused", "type": "bool" }]
+      "name": "StakeAccount"
     }
   ],
-  "accounts": [
+  "address": "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy",
+  "errors": [
+    {
+      "code": 6000,
+      "msg": "Staking is paused",
+      "name": "Paused"
+    },
+    {
+      "code": 6001,
+      "msg": "Stake is still locked",
+      "name": "Locked"
+    },
+    {
+      "code": 6002,
+      "msg": "Amount must be positive",
+      "name": "BadAmount"
+    },
+    {
+      "code": 6003,
+      "msg": "Invalid lock/rate params",
+      "name": "BadParams"
+    },
+    {
+      "code": 6004,
+      "msg": "Reward pool is empty",
+      "name": "NothingToClaim"
+    },
+    {
+      "code": 6005,
+      "msg": "Not enough staked",
+      "name": "InsufficientStake"
+    },
+    {
+      "code": 6006,
+      "msg": "Vault account mismatch",
+      "name": "BadVault"
+    },
+    {
+      "code": 6007,
+      "msg": "Not the vault authority",
+      "name": "Unauthorized"
+    },
+    {
+      "code": 6008,
+      "msg": "Math overflow",
+      "name": "Overflow"
+    },
+    {
+      "code": 6009,
+      "msg": "Bad clock",
+      "name": "BadClock"
+    }
+  ],
+  "events": [
+    {
+      "discriminator": [
+        217,
+        192,
+        123,
+        72,
+        108,
+        150,
+        248,
+        33
+      ],
+      "name": "Claimed"
+    },
+    {
+      "discriminator": [
+        172,
+        248,
+        5,
+        253,
+        49,
+        255,
+        255,
+        232
+      ],
+      "name": "Paused"
+    },
+    {
+      "discriminator": [
+        164,
+        221,
+        242,
+        68,
+        164,
+        64,
+        24,
+        214
+      ],
+      "name": "PoolFunded"
+    },
+    {
+      "discriminator": [
+        11,
+        146,
+        45,
+        205,
+        230,
+        58,
+        213,
+        240
+      ],
+      "name": "Staked"
+    },
+    {
+      "discriminator": [
+        27,
+        179,
+        156,
+        215,
+        47,
+        71,
+        195,
+        7
+      ],
+      "name": "Unstaked"
+    },
+    {
+      "discriminator": [
+        208,
+        126,
+        68,
+        195,
+        174,
+        171,
+        178,
+        2
+      ],
+      "name": "VaultInit"
+    }
+  ],
+  "instructions": [
+    {
+      "accounts": [
+        {
+          "name": "user",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "user_ata",
+          "writable": true
+        },
+        {
+          "name": "stake_acc",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        }
+      ],
+      "args": [],
+      "discriminator": [
+        62,
+        198,
+        214,
+        193,
+        213,
+        159,
+        108,
+        210
+      ],
+      "docs": [
+        "Pay accrued yield from the funded pool (capped at `reward_pool`).",
+        "First claim requires the lock to have elapsed (mirrors the app)."
+      ],
+      "name": "claim"
+    },
+    {
+      "accounts": [
+        {
+          "name": "funder",
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "funder_ata",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        114,
+        64,
+        163,
+        112,
+        175,
+        167,
+        19,
+        121
+      ],
+      "docs": [
+        "Top up the reward pool (transfers tokens into `reward_vault`)."
+      ],
+      "name": "fund_rewards"
+    },
+    {
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault"
+        },
+        {
+          "name": "reward_vault"
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "lock_secs",
+          "type": "u64"
+        },
+        {
+          "name": "daily_rate_bps",
+          "type": "u16"
+        }
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "docs": [
+        "Create the vault config. The vault + reward ATAs (owned by the config",
+        "PDA) must exist before this call; see `docs/STAKING_VAULT.md`."
+      ],
+      "name": "initialize"
+    },
+    {
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "lock_secs",
+          "type": "u64"
+        },
+        {
+          "name": "daily_rate_bps",
+          "type": "u16"
+        }
+      ],
+      "discriminator": [
+        27,
+        234,
+        178,
+        52,
+        147,
+        2,
+        187,
+        141
+      ],
+      "docs": [
+        "Authority: update lock / rate."
+      ],
+      "name": "set_params"
+    },
+    {
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "docs": [
+        "Authority: pause / unpause all stake/unstake/claim."
+      ],
+      "name": "set_paused"
+    },
+    {
+      "accounts": [
+        {
+          "name": "user",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "user_ata",
+          "writable": true
+        },
+        {
+          "name": "stake_acc",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        206,
+        176,
+        202,
+        18,
+        200,
+        209,
+        179,
+        108
+      ],
+      "docs": [
+        "Lock tokens. Accrues existing yield first; top-up restarts the lock."
+      ],
+      "name": "stake"
+    },
+    {
+      "accounts": [
+        {
+          "name": "user",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "user_ata",
+          "writable": true
+        },
+        {
+          "name": "stake_acc",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        90,
+        95,
+        107,
+        42,
+        205,
+        124,
+        50,
+        225
+      ],
+      "docs": [
+        "Withdraw locked tokens after the lock expires. Accrued yield stays",
+        "claimable via `claim`."
+      ],
+      "name": "unstake"
+    }
+  ],
+  "types": [
+    {
+      "name": "Claimed",
+      "type": {
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
     {
       "name": "Config",
       "type": {
-        "kind": "struct",
         "fields": [
-          { "name": "authority", "type": "publicKey" },
-          { "name": "mint", "type": "publicKey" },
-          { "name": "vault", "type": "publicKey" },
-          { "name": "rewardVault", "type": "publicKey" },
-          { "name": "lockSecs", "type": "u64" },
-          { "name": "dailyRateBps", "type": "u16" },
-          { "name": "paused", "type": "bool" },
-          { "name": "bump", "type": "u8" },
-          { "name": "totalStaked", "type": "u64" },
-          { "name": "rewardPool", "type": "u64" }
-        ]
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "lock_secs",
+            "type": "u64"
+          },
+          {
+            "name": "daily_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "reward_pool",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Paused",
+      "type": {
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "PoolFunded",
+      "type": {
+        "fields": [
+          {
+            "name": "funder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reward_pool",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "StakeAccount",
       "type": {
-        "kind": "struct",
         "fields": [
-          { "name": "owner", "type": "publicKey" },
-          { "name": "amount", "type": "u64" },
-          { "name": "stakedAt", "type": "i64" },
-          { "name": "lastAccrualAt", "type": "i64" },
-          { "name": "pending", "type": "u64" },
-          { "name": "bump", "type": "u8" }
-        ]
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "staked_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_accrual_at",
+            "type": "i64"
+          },
+          {
+            "name": "pending",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Staked",
+      "type": {
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Unstaked",
+      "type": {
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "VaultInit",
+      "type": {
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "lock_secs",
+            "type": "u64"
+          },
+          {
+            "name": "daily_rate_bps",
+            "type": "u16"
+          }
+        ],
+        "kind": "struct"
       }
     }
-  ],
-  "events": [
-    { "name": "VaultInit", "fields": [] },
-    { "name": "PoolFunded", "fields": [] },
-    { "name": "Staked", "fields": [] },
-    { "name": "Unstaked", "fields": [] },
-    { "name": "Claimed", "fields": [] },
-    { "name": "Paused", "fields": [] }
-  ],
-  "errors": [
-    { "code": 6000, "name": "Paused", "msg": "Staking is paused" },
-    { "code": 6001, "name": "Locked", "msg": "Stake is still locked" },
-    { "code": 6002, "name": "BadAmount", "msg": "Amount must be positive" },
-    { "code": 6003, "name": "BadParams", "msg": "Invalid lock/rate params" },
-    { "code": 6004, "name": "NothingToClaim", "msg": "Reward pool is empty" },
-    { "code": 6005, "name": "InsufficientStake", "msg": "Not enough staked" },
-    { "code": 6006, "name": "BadVault", "msg": "Vault account mismatch" },
-    { "code": 6007, "name": "Unauthorized", "msg": "Not the vault authority" },
-    { "code": 6008, "name": "Overflow", "msg": "Math overflow" },
-    { "code": 6009, "name": "BadClock", "msg": "Bad clock" }
-  ],
-  "metadata": {
-    "address": "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy"
-  }
+  ]
 }

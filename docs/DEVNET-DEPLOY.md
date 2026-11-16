@@ -50,7 +50,7 @@ All three of these must agree (pre-deploy they all carry the placeholder
 |---|---|
 | `programs/blokz-stake/src/lib.rs` | `declare_id!(...)` |
 | `Anchor.toml` | `[programs.devnet] blokz_stake` |
-| `src/lib/game/idl/blokz_stake.json` | `metadata.address` |
+| `src/lib/game/idl/blokz_stake.json` | top-level `address` |
 
 Sync the first two, then rebuild the third:
 
@@ -62,11 +62,12 @@ anchor idl build
 cp target/idl/blokz_stake.json src/lib/game/idl/blokz_stake.json
 ```
 
-`anchor idl build` stamps `metadata.address` from the synced id, so the copy
-keeps `vault.ts`'s `vaultIdlAddress()` honest. If `git diff` on the IDL shows
-anything besides `metadata.address`, stop: that is real interface drift, and
-`vault.ts` (discriminators, account order, arg types) must be reconciled
-before deploy. CI enforces this (`idl-drift` job).
+`anchor build` writes the program id to the IDL's top-level `address`, so the
+copy keeps `vault.ts`'s `vaultIdlAddress()` honest (it also falls back to
+the pre-0.31 `metadata.address` spelling). If `git diff` on the IDL shows
+anything besides `address`, stop: that is real interface drift, and
+`vault.ts` (discriminators, account order, arg types, account/arg names)
+must be reconciled before deploy. CI enforces this (`idl-drift` job).
 
 ## 3. Anchor build
 
