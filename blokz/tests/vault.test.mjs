@@ -10,6 +10,8 @@
  * - message compilation structure + signed-envelope layout
  * - refusal-first submit: no signer / bad signature / missing accounts /
  *   bad amounts all return `{ ok: false }` with an error — never silent ok
+ * - regenerated IDL shape: program address, snake_case names,
+ *   signer/writable flags, both account-key conventions accepted
  *
  * Run: `node --test tests/vault.test.mjs` from blokz/
  */
@@ -23,11 +25,13 @@ import {
   buildVaultAccountMetas,
   compileVaultTransaction,
   encodeVaultInstructionData,
+  getVaultInstructionDef,
   requestVaultClaim,
   requestVaultStake,
   serializeSignedVaultTransaction,
   submitVaultInstruction,
   vaultDiscriminator,
+  vaultIdlAddress,
   vaultInstructionNames,
 } from "../src/lib/game/vault.ts";
 
@@ -130,6 +134,63 @@ describe("vault account metas", () => {
       () => buildVaultAccountMetas("stake", { user: MINT }),
       /missing account "mint"/,
     );
+  });
+
+  it("accepts snake_case and camelCase account keys", () => {
+    const snake = buildVaultAccountMetas("claim", {
+      user: MINT,
+      mint: MINT,
+      reward_vault: MINT,
+      user_ata: MINT,
+      stake_acc: MINT,
+      config: MINT,
+      token_program: TOKEN_2022,
+    });
+    const camel = buildVaultAccountMetas("claim", {
+      user: MINT,
+      mint: MINT,
+      rewardVault: MINT,
+      userAta: MINT,
+      stakeAcc: MINT,
+      config: MINT,
+      tokenProgram: TOKEN_2022,
+    });
+    assert.deepEqual(
+      snake.map((k) => k.pubkey),
+      camel.map((k) => k.pubkey),
+    );
+  });
+});
+
+describe("regenerated IDL shape (anchor build)", () => {
+  it("exposes the placeholder program address", () => {
+    assert.equal(vaultIdlAddress(), "Gb5ZSSPaHM1C2DNYAsoMvD1HJru8WCY2VF47MamvkDYy");
+  });
+
+  it("uses on-chain (snake_case) names with signer/writable flags", () => {
+    const names = vaultInstructionNames();
+    for (const n of ["fund_rewards", "set_params", "set_paused"]) {
+      assert.ok(names.includes(n), `IDL is missing ${n}`);
+    }
+    const stake = getVaultInstructionDef("stake");
+    assert.deepEqual(
+      stake.accounts.map((a) => a.name),
+      [
+        "user",
+        "mint",
+        "vault",
+        "user_ata",
+        "stake_acc",
+        "config",
+        "token_program",
+        "system_program",
+      ],
+    );
+    const byName = Object.fromEntries(stake.accounts.map((a) => [a.name, a]));
+    assert.equal(byName.user.signer, true);
+    assert.equal(byName.user.writable, true);
+    assert.equal(byName.mint.signer, undefined);
+    assert.equal(byName.mint.writable, undefined);
   });
 });
 
@@ -272,7 +333,7 @@ describe("vault submit refuses closed", () => {
       signOnly: true,
     });
     assert.equal(res.ok, false);
-    assert.match(res.error ?? "", /missing accounts.*"rewardVault"/);
+    assert.match(res.error ?? "", /missing accounts.*"reward_vault"/);
   });
 
   it("requestVaultStake/requestVaultClaim never resolve ok without a live vault + signer", async () => {

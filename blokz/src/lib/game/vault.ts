@@ -29,15 +29,28 @@
 import idl from "./idl/blokz_stake.json" with { type: "json" };
 import { getSolanaProvider, SOLANA_TOKEN } from "./solana.ts";
 
+export interface VaultIdlAccount {
+  name: string;
+  // Anchor <=0.30 IDL spelling.
+  isMut?: boolean;
+  isSigner?: boolean;
+  // Anchor >=0.31 IDL spelling (what `anchor build` emits now).
+  writable?: boolean;
+  signer?: boolean;
+}
+
 export interface VaultIdlInstruction {
   name: string;
-  accounts: { name: string; isMut: boolean; isSigner: boolean }[];
+  accounts: VaultIdlAccount[];
   args: { name: string; type: string }[];
 }
 
 export interface VaultIdl {
-  version: string;
-  name: string;
+  // Anchor >=0.31 `anchor build` output carries no version/name; the
+  // program address is top-level (older files used metadata.address).
+  version?: string;
+  name?: string;
+  address?: string;
   instructions: VaultIdlInstruction[];
   metadata?: { address?: string };
 }
@@ -105,13 +118,47 @@ export function getVaultInstructionDef(
   return VAULT_IDL.instructions.find((ix) => ix.name === name) ?? null;
 }
 
-export function vaultIdlVersion(): string {
-  return VAULT_IDL.version;
+export function vaultIdlVersion(): string | null {
+  const v = VAULT_IDL.version;
+  return typeof v === "string" && v.length > 0 ? v : null;
 }
 
 export function vaultIdlAddress(): string | null {
-  const a = VAULT_IDL.metadata?.address;
+  const a = VAULT_IDL.address ?? VAULT_IDL.metadata?.address;
   return typeof a === "string" && a.length > 0 ? a : null;
+}
+
+/**
+ * The regenerated IDL uses snake_case account/arg names
+ * (`reward_vault`, `lock_secs`) while older callers use camelCase
+ * (`rewardVault`, `lockSecs`). Accept both spellings so the checked-in
+ * IDL stays the single source of order while either convention resolves.
+ */
+function toCamelCase(name: string): string {
+  return name.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+function toSnakeCase(name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+}
+
+function pickNamed<T>(record: Record<string, T>, idlName: string): T | undefined {
+  const direct = record[idlName];
+  if (direct !== undefined) return direct;
+  const alt = idlName.includes("_") ? toCamelCase(idlName) : toSnakeCase(idlName);
+  if (alt !== idlName) {
+    const fallback = record[alt];
+    if (fallback !== undefined) return fallback;
+  }
+  return undefined;
+}
+
+function accountIsMut(a: VaultIdlAccount): boolean {
+  return a.writable ?? a.isMut ?? false;
+}
+
+function accountIsSigner(a: VaultIdlAccount): boolean {
+  return a.signer ?? a.isSigner ?? false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -285,7 +332,7 @@ export function encodeVaultArgs(
 ): Uint8Array {
   const parts: Uint8Array[] = [];
   for (const a of def.args) {
-    const v = args[a.name];
+    const v = pickNamed(args, a.name);
     if (v === undefined) {
       throw new Error(
         `Vault ${def.name}: missing arg "${a.name}" (${a.type})`,
@@ -341,14 +388,18 @@ export function buildVaultAccountMetas(
   const def = getVaultInstructionDef(name);
   if (!def) throw new Error(`IDL is missing the ${name} instruction`);
   return def.accounts.map((a) => {
-    const pubkey = accounts[a.name];
+    const pubkey = pickNamed(accounts, a.name);
     if (typeof pubkey !== "string" || pubkey.trim().length === 0) {
       throw new Error(
         `Vault ${name}: missing account "${a.name}" — pass it in accounts ` +
           `(PDA/ATA from your deploy; see docs/STAKING_VAULT.md)`,
       );
     }
-    return { pubkey: pubkey.trim(), isSigner: a.isSigner, isWritable: a.isMut };
+    return {
+      pubkey: pubkey.trim(),
+      isSigner: accountIsSigner(a),
+      isWritable: accountIsMut(a),
+    };
   });
 }
 
@@ -700,7 +751,7 @@ export function resolveVaultAccounts(
   const missing = def.accounts
     .map((a) => a.name)
     .filter((n) => {
-      const v = merged[n];
+      const v = pickNamed(merged, n);
       return typeof v !== "string" || v.trim().length === 0;
     });
   if (missing.length > 0) {
