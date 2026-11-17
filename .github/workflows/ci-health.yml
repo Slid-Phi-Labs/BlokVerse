@@ -1,0 +1,60 @@
+name: ci-health
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: ci-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    name: default-branch CI health
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Sync ci-health issue with default-branch status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')"
+          echo "default branch: $DEFAULT_BRANCH"
+          # Recent completed runs on the default branch (all workflows).
+          mapfile -t CONCLUSIONS < <(gh run list --branch "$DEFAULT_BRANCH" --limit 10 \
+            --json conclusion,status --jq '.[] | select(.status == "completed") | .conclusion')
+          echo "recent conclusions: ${CONCLUSIONS[*]:-<none completed>}"
+          RED=0
+          for c in ${CONCLUSIONS[@]:-}; do
+            case "$c" in
+              failure|timed_out|action_required) RED=1 ;;
+            esac
+          done
+          mapfile -t OPEN < <(gh issue list --label ci-health --state open --json number --jq '.[].number')
+          echo "open ci-health issues: ${OPEN[*]:-<none>}"
+          if [ "$RED" -eq 1 ]; then
+            echo "CI is RED on $DEFAULT_BRANCH."
+            if [ "${#OPEN[@]}" -eq 0 ]; then
+              gh issue create --label ci-health \
+                --title "CI health: default branch ($DEFAULT_BRANCH) is red" \
+                --body "One or more of the 10 most recent completed default-branch runs concluded red. This issue tracks the outage and auto-closes when CI is green again."
+            else
+              KEEP="${OPEN[0]}"
+              for n in "${OPEN[@]:1}"; do
+                gh issue close "$n" --comment "Deduplicating: keeping #$KEEP as the single ci-health tracker." || true
+              done
+              gh issue comment "$KEEP" --body "Still red on $DEFAULT_BRANCH as of $(date -u +%FT%TZ)." || true
+            fi
+          else
+            echo "CI is GREEN on $DEFAULT_BRANCH."
+            for n in ${OPEN[@]:-}; do
+              gh issue close "$n" --comment "CI is green on $DEFAULT_BRANCH again; auto-closing." || true
+            done
+          fi

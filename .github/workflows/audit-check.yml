@@ -1,0 +1,36 @@
+name: audit-check
+
+on:
+  push:
+    paths:
+      - "blokz/programs/**/Cargo.toml"
+      - "blokz/programs/**/Cargo.lock"
+      - .github/workflows/audit-check.yml
+  pull_request:
+    paths:
+      - "blokz/programs/**/Cargo.toml"
+      - "blokz/programs/**/Cargo.lock"
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  # audit-check posts its result as a check run, which needs checks: write.
+  checks: write
+
+jobs:
+  audit:
+    name: cargo audit (blokz-stake)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: blokz/programs/blokz-stake
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # defaults.run.working-directory does not apply to uses: steps;
+          # the action needs its own input or it looks in the repo root.
+          working-directory: blokz/programs/blokz-stake

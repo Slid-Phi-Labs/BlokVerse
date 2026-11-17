@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /blok-chain
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /blokgame
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /blokz
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /blokz/programs/blokz-stake
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
