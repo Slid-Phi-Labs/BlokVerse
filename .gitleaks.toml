@@ -1,0 +1,6 @@
+# Public EVM contract/token addresses are public identifiers, not secrets.
+# This allowlist exists only so gitleaks does not flag 0x addresses as keys.
+[allowlist]
+description = "Public 0x EVM addresses (token contracts) - public identifiers"
+regexTarget = "match"
+regexes = ['0x[0-9a-fA-F]{40}']
