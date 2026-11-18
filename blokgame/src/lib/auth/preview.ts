@@ -13,12 +13,12 @@
  * These MUST equal the broker's `GROK_PREVIEW_CLIENT_ID` /
  * `GROK_PREVIEW_CLIENT_SECRET` (set in the broker's Vercel env; the broker stores
  * only the secret's `base64url(SHA-256)` hash). This is a dedicated, low-privilege
- * client (preview-only, `*.grok-sandbox.com`) — rotate it by regenerating the
- * broker env var and this constant together.
+ * client (preview-only, `*.grok-sandbox.com`) — the secret is supplied ONLY via the
+ * PREVIEW_CLIENT_SECRET env var (never commit the value).
  */
 export const PREVIEW_CLIENT_ID = "grok_preview";
 export const PREVIEW_CLIENT_SECRET =
-  "REMOVED-SECRET";
+  process.env.PREVIEW_CLIENT_SECRET ?? "";
 
 /** The shared auth broker issuer (OIDC discovery lives under it). */
 export const GROK_ISSUER_DEFAULT = "https://auth.grok.me";
