@@ -5,6 +5,7 @@ node_modules/
 .env.*
 
 .vercel/
+.vercel/output/
 .vercel-deploy-payload.json
 deploy-args.json
 full-deploy.json
